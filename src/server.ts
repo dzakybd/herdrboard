@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { basename } from "node:path";
 import { LANES, Store, type Lane, type Settings } from "./db.ts";
 import { gate, loadToken } from "./auth.ts";
+import { expandHome, listDirs } from "./fs.ts";
 import { cliHerdr } from "./herdr.ts";
 import { Pipeline } from "./pipeline.ts";
 import { defaultSettings, EFFORTS, MODES, storeRole, validateRole } from "./profiles.ts";
@@ -77,13 +78,18 @@ export function serve(): void {
         })),
       };
     },
+    "GET /api/fs": (req) => {
+      const q = new URL(req.url).searchParams;
+      const fallback = store.projects()[0]?.path.replace(/\/[^/]+$/, "") || "~";
+      return listDirs(q.get("path") || fallback, q.get("hidden") === "1");
+    },
     "PUT /api/settings": (_r, _p, body) => {
       store.saveSettings(validateSettings(body));
       return store.settings();
     },
 
     "POST /api/projects": (_r, _p, body) => {
-      const raw = String(body.path ?? "").replace(/^~(?=\/|$)/, homedir());
+      const raw = expandHome(String(body.path ?? ""));
       if (!existsSync(raw)) throw new Error(`no such folder: ${raw}`);
       const path = realpathSync(raw);
       const top = git(path, "rev-parse", "--show-toplevel");
@@ -184,10 +190,13 @@ export function serve(): void {
   }
 
   const page = Bun.file(new URL("../web/index.html", import.meta.url).pathname);
+  const docs = Bun.file(new URL("../web/docs.html", import.meta.url).pathname);
   Bun.serve({
     hostname: HOST,
     port: PORT,
-    routes: { ...routes, "/": guarded(() => new Response(page, { headers: { "content-type": "text/html" } })) },
+    routes: { ...routes, "/": guarded(() => new Response(page, { headers: { "content-type": "text/html" } })),
+      "/docs": guarded(() => new Response(docs, { headers: { "content-type": "text/html" } })),
+    },
     fetch: () => Response.json({ error: "not found" }, { status: 404 }),
   });
 

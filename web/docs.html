@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>herdrboard docs</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%221%22 y=%222%22 width=%224%22 height=%2212%22 rx=%221.5%22 fill=%22%230B57D0%22/%3E%3Crect x=%226%22 y=%222%22 width=%224%22 height=%228%22 rx=%221.5%22 fill=%22%230B57D0%22/%3E%3Crect x=%2211%22 y=%222%22 width=%224%22 height=%225%22 rx=%221.5%22 fill=%22%230B57D0%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600&family=Roboto+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=block">
+<style>
+:root {
+  --primary: #0b57d0; --on-primary: #fff; --primary-container: #d3e3fd; --on-primary-container: #041e49;
+  --secondary-container: #dde3ea; --on-secondary-container: #151c26;
+  --error: #b3261e; --error-container: #f9dedc; --on-error-container: #410e0b;
+  --ok: #146c2e; --ok-container: #c4eed0;
+  --surface: #f8f9fa; --on-surface: #1f1f1f; --on-surface-variant: #444746;
+  --outline: #747775; --outline-variant: #c4c7c5;
+  --sc-lowest: #ffffff; --sc-low: #f1f3f4; --sc: #eaecee; --sc-high: #e3e5e8; --sc-highest: #dcdfe2;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #a8c7fa; --on-primary: #062e6f; --primary-container: #0842a0; --on-primary-container: #d3e3fd;
+    --secondary-container: #3b4858; --on-secondary-container: #dde3ea;
+    --error: #f2b8b5; --error-container: #8c1d18; --on-error-container: #f9dedc;
+    --ok: #6dd58c; --ok-container: #0f5223;
+    --surface: #131314; --on-surface: #e3e3e3; --on-surface-variant: #c4c7c5;
+    --outline: #8e918f; --outline-variant: #444746;
+    --sc-lowest: #0e0e0f; --sc-low: #1b1b1c; --sc: #1f1f20; --sc-high: #282829; --sc-highest: #333335;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+body { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 15px/24px "Roboto Flex", Roboto, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: var(--primary); }
+.icon { font-family: "Material Symbols Rounded"; font-size: 20px; line-height: 1; font-feature-settings: "liga"; user-select: none; display: inline-block; vertical-align: middle; }
+code, pre, .mono { font-family: "Roboto Mono", ui-monospace, monospace; font-size: 13px; }
+:not(pre) > code { background: var(--sc-high); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+pre { background: var(--sc); border-radius: 12px; padding: 14px 16px; overflow-x: auto; line-height: 20px; margin: 12px 0; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+.appbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; height: 64px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--outline-variant); }
+.logo { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); }
+.appbar b { font-weight: 500; font-size: 16px; flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border-radius: 20px; background: var(--secondary-container); color: var(--on-secondary-container); text-decoration: none; font-weight: 500; font-size: 14px; }
+
+.layout { display: grid; grid-template-columns: 240px minmax(0, 860px); gap: 40px; justify-content: center; padding: 24px 24px 120px; }
+nav.toc { position: sticky; top: 88px; align-self: start; display: grid; gap: 2px; font-size: 14px; }
+nav.toc a { color: var(--on-surface-variant); text-decoration: none; padding: 6px 14px; border-radius: 18px; }
+nav.toc a:hover { background: var(--sc-high); color: var(--on-surface); }
+nav.toc a.on { background: var(--secondary-container); color: var(--on-secondary-container); font-weight: 500; }
+
+h1 { font-size: 36px; line-height: 44px; font-weight: 400; margin: 8px 0 12px; letter-spacing: -.01em; }
+h2 { font-size: 24px; line-height: 32px; font-weight: 400; margin: 56px 0 12px; padding-top: 8px; }
+h3 { font-size: 16px; line-height: 24px; font-weight: 500; margin: 28px 0 8px; }
+p { margin: 10px 0; }
+.lead { font-size: 18px; line-height: 28px; color: var(--on-surface-variant); }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+
+.diagram { background: var(--sc-low); border-radius: 16px; padding: 20px; margin: 16px 0; overflow-x: auto; text-align: center; }
+.diagram .mermaid { visibility: hidden; }
+.diagram .mermaid[data-processed] { visibility: visible; }
+.cap { font-size: 13px; color: var(--on-surface-variant); margin-top: 8px; text-align: center; }
+
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--outline-variant); vertical-align: top; }
+th { color: var(--on-surface-variant); font-weight: 500; font-size: 13px; }
+.table-wrap { overflow-x: auto; border-radius: 12px; background: var(--sc-lowest); border: 1px solid var(--outline-variant); }
+.table-wrap table { margin: 0; }
+.table-wrap tr:last-child td { border-bottom: 0; }
+
+.steps { counter-reset: step; list-style: none; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+main { min-width: 0; }
+.steps li { counter-increment: step; position: relative; padding: 14px 16px 14px 60px; background: var(--sc-low); border-radius: 16px; margin: 0; }
+.steps li::before { content: counter(step); position: absolute; left: 16px; top: 14px; width: 28px; height: 28px; border-radius: 14px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-weight: 500; font-size: 14px; }
+.steps pre { margin: 8px 0 0; background: var(--sc-high); }
+
+.note { display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; margin: 16px 0; background: var(--primary-container); color: var(--on-primary-container); }
+.note.warn { background: var(--error-container); color: var(--on-error-container); }
+.note .icon { margin-top: 2px; }
+.note p { margin: 0; }
+.lane-chip { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; height: 24px; border-radius: 8px; background: var(--secondary-container); color: var(--on-secondary-container); font-size: 13px; font-weight: 500; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 16px 16px 96px; gap: 0; }
+  nav.toc { position: static; display: flex; overflow-x: auto; gap: 4px; padding-bottom: 8px; margin-bottom: 8px; }
+  nav.toc a { white-space: nowrap; background: var(--sc-low); }
+  h1 { font-size: 28px; line-height: 36px; }
+}
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="logo"><span class="icon">view_kanban</span></div>
+  <b>herdrboard docs</b>
+  <a class="btn" href="/"><span class="icon">arrow_back</span>Board</a>
+</header>
+
+<div class="layout">
+  <nav class="toc" id="toc" aria-label="Contents">
+    <a href="#overview">Overview</a>
+    <a href="#quickstart">Quick start</a>
+    <a href="#lanes">Board and lanes</a>
+    <a href="#lifecycle">A card's life</a>
+    <a href="#agents">Agents and profiles</a>
+    <a href="#orchestrator">Orchestrator</a>
+    <a href="#automations">Automations</a>
+    <a href="#needs-you">Needs you</a>
+    <a href="#phone">Phone access</a>
+    <a href="#cli">CLI reference</a>
+    <a href="#skill">Agent skill</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+  </nav>
+
+  <main>
+    <section id="overview">
+      <h1>How to use herdrboard</h1>
+      <p class="lead">herdrboard is a kanban board that hands each card to a coding agent running in herdr. Every agent is a normal, interactive Claude Code session, so you can watch it in Ovis and type to it whenever you want. The board decides what each agent works on and tracks where every card is.</p>
+      <div class="diagram"><pre class="mermaid">
+flowchart LR
+  you(["You<br/>browser · phone"]) -->|web UI| board["herdrboard<br/>Bun server :7420<br/>SQLite + 3 s tick"]
+  board -->|herdr CLI| herdr["herdr server"]
+  herdr --> orch["Orchestrator<br/>main checkout"]
+  herdr --> w["Worker<br/>own git worktree"]
+  herdr --> r["Reviewer<br/>split pane"]
+  orch & w & r -->|hb CLI| board
+  ovis(["Ovis / herdr TUI"]) -.->|same panes| herdr
+      </pre><div class="cap">The board never runs agents itself. It asks herdr to open panes, then types a profile command such as <code>cc2</code> into them.</div></div>
+    </section>
+
+    <section id="quickstart">
+      <h2>Quick start</h2>
+      <ol class="steps">
+        <li><b>Install and start the service.</b> This puts <code>hb</code> on your PATH and keeps the board running with launchd.
+          <pre>git clone https://github.com/dzakybd/herdrboard && cd herdrboard
+./scripts/install.sh</pre></li>
+        <li><b>Open the board</b> at <a href="http://127.0.0.1:7420">http://127.0.0.1:7420</a>. On your phone, run <code>hb url</code> and open that link once (see <a href="#phone">Phone access</a>).</li>
+        <li><b>Add a project.</b> Open <span class="icon">folder_open</span> Projects, press <b>Browse</b>, click through to your repository (git repos are marked), then <b>Add project</b>.</li>
+        <li><b>Check the agents.</b> In <span class="icon">settings</span> Settings, pick the profile, model, effort and mode for the orchestrator, worker and reviewer. Your <code>cc1</code>…<code>cc4</code>, <code>ccd</code> functions are already listed.</li>
+        <li><b>Create a card</b> with <b>New card</b>. Write the brief as if for a new teammate: the worker sees only the brief. Leave it in Todo and a worker starts within a few seconds.</li>
+        <li><b>Watch it</b> on the board, or press <b>Open in herdr</b> on the card to jump to the live session in Ovis.</li>
+      </ol>
+    </section>
+
+    <section id="lanes">
+      <h2>Board and lanes</h2>
+      <p>Cards move left to right. You move cards between <span class="lane-chip">Backlog</span> and <span class="lane-chip">Todo</span>, and to <span class="lane-chip">Done</span>. The board moves everything else, based on what the agents report and what herdr sees.</p>
+      <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> Backlog
+  Backlog --> Todo: you start it
+  Todo --> Working: worker launched
+  Working --> Review: hb done (review on)
+  Working --> Ready: hb done (review off)
+  Review --> Working: changes requested
+  Review --> Ready: approved
+  Working --> NeedsYou: blocked · hb ask · stopped · exited
+  Review --> NeedsYou: blocked · stopped
+  NeedsYou --> Working: agent works again
+  Ready --> Done: Finish
+  Done --> [*]
+      </pre></div>
+      <div class="table-wrap"><table>
+        <tr><th>Lane</th><th>Meaning</th></tr>
+        <tr><td>Backlog</td><td>Parked. Nothing runs.</td></tr>
+        <tr><td>Todo</td><td>Queued. Starts as soon as fewer than <i>Max parallel workers</i> (default 3) are busy.</td></tr>
+        <tr><td>Working</td><td>A worker is on it, in its own git worktree and branch <code>hb/&lt;id&gt;-&lt;slug&gt;</code>.</td></tr>
+        <tr><td>Review</td><td>A reviewer agent is checking the diff in a pane next to the worker.</td></tr>
+        <tr><td>Needs you</td><td>An agent is waiting on you. The card says why.</td></tr>
+        <tr><td>Ready</td><td>Done and (if review was on) approved. The branch has the commits.</td></tr>
+        <tr><td>Done</td><td>Finished: the worktree is removed, the branch is kept. Hidden after 3 days.</td></tr>
+      </table></div>
+      <div class="note"><span class="icon">info</span><p><b>Finish</b> (or dragging to Done) removes the card's worktree and closes its herdr workspace. herdr refuses if there is uncommitted work. Merging the branch or opening a PR is up to you, or put "open a PR" in the brief.</p></div>
+    </section>
+
+    <section id="lifecycle">
+      <h2>A card's life</h2>
+      <p>Here is what happens behind one card with review on:</p>
+      <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant B as herdrboard
+  participant H as herdr
+  participant W as Worker (cc2)
+  participant R as Reviewer (ccd)
+  B->>H: worktree create hb/12-add-login
+  B->>H: pane run "HB_CARD=12 cc2 --model … --permission-mode …"
+  H-->>B: agent idle (answers folder-trust prompt if shown)
+  B->>W: "Read ~/.herdrboard/cards/12/worker.md and follow it."
+  W->>W: works, commits on its branch
+  W->>B: hb done --summary "…"
+  B->>H: split pane, start reviewer
+  B->>R: "Read reviewer.md and follow it."
+  R->>B: hb review --changes "1. …"
+  B->>H: close reviewer pane
+  B->>W: reviewer feedback (round 1 of 2)
+  W->>B: hb done
+  B->>R: fresh reviewer
+  R->>B: hb review --approve
+  B->>B: card → Ready
+      </pre><div class="cap">Each round gets a fresh reviewer. After <i>Max review rounds</i> (default 2) of changes, the card goes to Needs you.</div></div>
+      <p>Turn <b>Agent review</b> off on a card (or as a project default) when you want speed: <code>hb done</code> then sends the card straight to Ready. A card with <b>Own worktree</b> off runs in a tab in the project's main checkout instead, which suits read-only jobs like a PR-review sweep.</p>
+    </section>
+
+    <section id="agents">
+      <h2>Agents and profiles</h2>
+      <p>There are three roles: <b>orchestrator</b>, <b>worker</b> and <b>reviewer</b>. Each role has four settings:</p>
+      <div class="table-wrap"><table>
+        <tr><th>Setting</th><th>Becomes</th><th>Example</th></tr>
+        <tr><td>Profile</td><td>the command typed into the pane</td><td><code>cc2</code> (your zsh function)</td></tr>
+        <tr><td>Model</td><td><code>--model</code></td><td><code>opus</code>, <code>sonnet</code>, <code>glm-5-3-flash-2</code></td></tr>
+        <tr><td>Effort</td><td><code>--effort</code></td><td><code>low</code> · <code>medium</code> · <code>high</code> · <code>xhigh</code> · <code>max</code></td></tr>
+        <tr><td>Mode</td><td><code>--permission-mode</code></td><td><code>bypassPermissions</code> (default), <code>acceptEdits</code>, <code>auto</code>, <code>plan</code>…</td></tr>
+      </table></div>
+      <p>Settings are layered, and each field falls back on its own. A card can change only the effort and still use the project's model:</p>
+      <div class="diagram"><pre class="mermaid">
+flowchart LR
+  c["Card override<br/>(worker, reviewer)"] -->|empty field| p["Project override<br/>(all three roles)"] -->|empty field| s["Settings default"]
+  c & p & s --> cmd["cc2 --model opus --effort high<br/>--permission-mode bypassPermissions"]
+      </pre></div>
+      <div class="note warn"><span class="icon">warning</span><p>Any mode other than <b>Bypass</b> makes the agent stop at permission prompts, including before it runs <code>hb done</code>. Those cards wait in Needs you until you approve in herdr.</p></div>
+      <p>To use a tool other than your cc functions, add a profile in Settings with any command, such as <code>claude</code> or <code>codex</code>. Model, effort and mode flags are Claude Code flags, so leave them empty for other tools.</p>
+    </section>
+
+    <section id="orchestrator">
+      <h2>Orchestrator</h2>
+      <p>Pick a project in the top bar and the orchestrator strip appears. Press <b>Start</b>: herdrboard opens a tab in the project's main checkout and starts the orchestrator profile there. Then tell it what you want, either in the strip on the board or in its terminal in Ovis. It breaks your request into self-contained cards with <code>hb card add</code>, and workers pick them up.</p>
+      <pre>You:  Add rate limiting to the public API and document it.
+Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort high
+      hb card add "Document rate limits" --brief "…" --no-review</pre>
+      <p>The orchestrator only files and tracks cards. It does not write code itself.</p>
+    </section>
+
+    <section id="automations">
+      <h2>Automations</h2>
+      <p>An automation creates a card on a schedule. Open <span class="icon">schedule</span> Automations and give it a name, a trigger, the card title and brief, and optionally its own agent settings.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Trigger</th><th>Fires</th></tr>
+        <tr><td><code>every 30m</code> · <code>every 2h</code> · <code>every 1d</code></td><td>at that interval</td></tr>
+        <tr><td><code>daily 09:00</code></td><td>every day at 09:00 local time</td></tr>
+        <tr><td><code>weekly mon 09:00</code></td><td>every Monday at 09:00</td></tr>
+      </table></div>
+      <p>If the Mac was asleep at the scheduled time, it fires once on wake. If the automation's previous card is still open (not Ready or Done), the fire is skipped, never queued. <b>Run</b> fires it now.</p>
+    </section>
+
+    <section id="needs-you">
+      <h2>Needs you</h2>
+      <p>The board watches each agent's state in herdr. A card turns red in <span class="lane-chip">Needs you</span> when:</p>
+      <div class="table-wrap"><table>
+        <tr><th>Reason on the card</th><th>What to do</th></tr>
+        <tr><td>Waiting for a permission or an answer in herdr</td><td>Press <b>Open in herdr</b> and answer the prompt. The card returns on its own.</td></tr>
+        <tr><td>A question the agent asked with <code>hb ask</code></td><td>Type the answer in <b>Reply to the agent</b> on the card, or in its terminal.</td></tr>
+        <tr><td>Stopped without running <code>hb done</code></td><td>Reply with what's missing, or tell it to run <code>hb done</code>.</td></tr>
+        <tr><td>Review still failing after 2 rounds</td><td>Read the notes, then reply to the worker or finish the card yourself.</td></tr>
+        <tr><td>The agent exited / launch failed</td><td>Finish the card, then create it again.</td></tr>
+      </table></div>
+    </section>
+
+    <section id="phone">
+      <h2>Phone access</h2>
+      <p>The board listens on all interfaces (port 7420). Because agents can run with bypassed permissions, every device other than the Mac needs a token.</p>
+      <ol class="steps">
+        <li>On the Mac, run <code>hb url</code>. It prints something like <code>http://your-mac.local:7420/?token=…</code></li>
+        <li>Open that link on your phone once. It stores a cookie and drops the token from the address bar.</li>
+        <li>From then on, <code>http://your-mac.local:7420</code> just works on that phone. Add it to your home screen.</li>
+      </ol>
+      <div class="note warn"><span class="icon">lock</span><p>It is plain HTTP: use it only on a network you trust, or reach it through Tailscale. To revoke every device, delete <code>~/.herdrboard/token</code> and run <code>launchctl kickstart -k gui/$(id -u)/dev.dzaky.herdrboard</code>.</p></div>
+    </section>
+
+    <section id="cli">
+      <h2>CLI reference</h2>
+      <p>Everything in the UI is also in <code>hb</code>. Agents use the same commands, and <code>$HB_CARD</code> / <code>$HB_PROJECT</code> fill in the ids for them.</p>
+      <div class="table-wrap"><table>
+        <tr><th>Command</th><th>Does</th></tr>
+        <tr><td><code>hb project add &lt;path&gt;</code></td><td>Register a repository</td></tr>
+        <tr><td><code>hb card add "&lt;title&gt;" --brief "…"</code></td><td>Create a card in Todo. Add <code>--backlog</code>, <code>--no-review</code>, <code>--no-worktree</code>, <code>--worker cc2</code>, <code>--model</code>, <code>--effort</code>, <code>--mode</code></td></tr>
+        <tr><td><code>hb card list [--lane needs_you]</code></td><td>List open cards</td></tr>
+        <tr><td><code>hb card show &lt;id&gt;</code></td><td>Brief, summary, branch and activity log</td></tr>
+        <tr><td><code>hb card move &lt;id&gt; todo|backlog|done</code></td><td>Start, park or finish a card</td></tr>
+        <tr><td><code>hb done --summary "…"</code></td><td>Worker: the task is finished</td></tr>
+        <tr><td><code>hb review --approve</code> / <code>--changes "…"</code></td><td>Reviewer: the verdict</td></tr>
+        <tr><td><code>hb ask "…"</code></td><td>Any agent: ask you a question</td></tr>
+        <tr><td><code>hb orch start</code> / <code>hb orch say "…"</code></td><td>Start or message the orchestrator</td></tr>
+        <tr><td><code>hb automation add|list|run</code></td><td>Manage automations</td></tr>
+        <tr><td><code>hb url</code></td><td>Link for your phone</td></tr>
+        <tr><td><code>hb serve</code></td><td>Run the board in the foreground (launchd normally does this)</td></tr>
+      </table></div>
+    </section>
+
+    <section id="skill">
+      <h2>Agent skill</h2>
+      <p>To teach any coding agent (in any session, not only ones the board started) how to use the board, install the skill:</p>
+      <pre>npx skills add dzakybd/herdrboard</pre>
+      <p>Then you can say "put this on the board" or "what's waiting for me on herdrboard?" in any Claude Code session.</p>
+    </section>
+
+    <section id="troubleshooting">
+      <h2>Troubleshooting</h2>
+      <h3>A card is stuck in Working</h3>
+      <p>Press <b>Open in herdr</b> and look at the agent. If it finished but forgot to report, tell it to run <code>hb done</code>. The board flags this on its own once the agent goes idle.</p>
+      <h3>"herdrboard is not running"</h3>
+      <pre>launchctl kickstart -k gui/$(id -u)/dev.dzaky.herdrboard
+tail -f ~/.herdrboard/serve.log</pre>
+      <h3>Finish fails</h3>
+      <p>herdr won't remove a worktree with uncommitted changes. Open it in herdr, commit or discard, then Finish again.</p>
+      <h3>Where things live</h3>
+      <div class="table-wrap"><table>
+        <tr><td><code>~/.herdrboard/herdrboard.db</code></td><td>Projects, cards, activity, automations, settings</td></tr>
+        <tr><td><code>~/.herdrboard/cards/&lt;id&gt;/</code></td><td>Briefs handed to the agents</td></tr>
+        <tr><td><code>~/.herdr/worktrees/&lt;repo&gt;/</code></td><td>Card worktrees (herdr's)</td></tr>
+        <tr><td><code>~/.herdrboard/serve.log</code></td><td>Service log</td></tr>
+      </table></div>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const css = getComputedStyle(document.documentElement);
+const v = (n) => css.getPropertyValue(n).trim();
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "base",
+  fontFamily: "Roboto Flex, Roboto, system-ui, sans-serif",
+  themeVariables: {
+    background: v("--sc-low"), primaryColor: v("--sc-lowest"), primaryBorderColor: v("--outline"), primaryTextColor: v("--on-surface"),
+    secondaryColor: v("--secondary-container"), tertiaryColor: v("--sc-high"), lineColor: v("--outline"), textColor: v("--on-surface"),
+    noteBkgColor: v("--primary-container"), noteTextColor: v("--on-primary-container"), noteBorderColor: v("--primary"),
+    actorBkg: v("--sc-lowest"), actorBorder: v("--outline"), actorTextColor: v("--on-surface"), signalColor: v("--on-surface"), signalTextColor: v("--on-surface"),
+    labelBoxBkgColor: v("--sc-lowest"), labelTextColor: v("--on-surface"), sequenceNumberColor: v("--on-primary"),
+    edgeLabelBackground: v("--sc-low"), clusterBkg: v("--sc"), fontSize: "14px",
+  },
+});
+await mermaid.run({ querySelector: ".mermaid" });
+
+// Highlight the section in view.
+const links = [...document.querySelectorAll("#toc a")];
+const seen = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) links.forEach((a) => a.classList.toggle("on", a.hash === `#${e.target.id}`));
+}, { rootMargin: "-80px 0px -70% 0px" });
+document.querySelectorAll("main > section").forEach((s) => seen.observe(s));
+</script>
+</body>
+</html>

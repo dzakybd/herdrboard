@@ -78,6 +78,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .btn.sm { height: 32px; padding: 0 16px; border-radius: 16px; font-size: 13px; }
 .icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 20px; color: var(--on-surface-variant); }
 .icon-btn.sm { width: 32px; height: 32px; }
+a.icon-btn { text-decoration: none; }
 .icon-btn.filled { background: var(--primary); color: var(--on-primary); }
 .icon-btn:disabled { opacity: .38; cursor: default; }
 .fab {
@@ -145,15 +146,19 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .composer:focus-within { outline: 2px solid var(--primary); }
 
 /* --- board --- */
-.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(264px, 1fr); gap: 12px; padding: 16px 16px 96px; overflow-x: auto; align-items: start; }
-.lane { border-radius: 16px; background: var(--sc-low); padding: 8px; min-height: 160px; transition: background .15s, outline-color .15s; outline: 2px dashed transparent; outline-offset: -2px; }
+/* The page is one screen tall: lanes share the width and each scrolls on its own. */
+body { display: flex; flex-direction: column; height: 100dvh; }
+.board { flex: 1; min-height: 0; display: flex; gap: 10px; padding: 12px 16px 16px; overflow-x: auto; }
+.lane { flex: 1 1 0; min-width: 210px; display: flex; flex-direction: column; border-radius: 16px; background: var(--sc-low); transition: background .15s, outline-color .15s, flex-grow .2s; outline: 2px dashed transparent; outline-offset: -2px; }
+.lane.vacant { flex-grow: .5; min-width: 128px; }
+.lane-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 72px; }
 .lane.over { outline-color: var(--primary); background: var(--sc); }
-.lane-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 12px; color: var(--on-surface-variant); }
+.lane-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px 16px; color: var(--on-surface-variant); }
 .lane-head .icon { font-size: 18px; }
 .lane-head .title-s { flex: 1; color: var(--on-surface); }
 .lane.alert { background: color-mix(in srgb, var(--error-container) 45%, var(--sc-low)); }
 .lane.alert .lane-head, .lane.alert .lane-head .title-s { color: var(--error); }
-.empty { padding: 20px 8px; text-align: center; color: var(--on-surface-variant); font-size: 12px; opacity: .8; }
+.empty { padding: 20px 4px; text-align: center; color: var(--on-surface-variant); font-size: 12px; opacity: .8; }
 
 .card { position: relative; display: grid; gap: 8px; padding: 12px 14px; margin-bottom: 8px; border-radius: 12px; background: var(--sc-lowest); box-shadow: var(--shadow-1); cursor: pointer; }
 @media (prefers-color-scheme: dark) { .card { background: var(--sc-high); box-shadow: none; } }
@@ -202,10 +207,10 @@ dialog[open] { display: flex; flex-direction: column; animation: rise .2s cubic-
 .dlg-head { display: flex; align-items: center; gap: 16px; padding: 24px 24px 16px; }
 .dlg-head > .icon { color: var(--secondary); font-size: 24px; }
 .dlg-head .title-l { flex: 1; }
-.dlg-body { padding: 8px 24px 0; overflow-y: auto; display: grid; gap: 20px; align-content: start; }
+.dlg-body { padding: 8px 24px 0; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-content: start; }
 .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 20px 24px 24px; }
 .list { display: grid; gap: 8px; }
-.list-item { position: relative; display: grid; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--sc-low); --fbg: var(--sc-low); }
+.list-item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--sc-low); --fbg: var(--sc-low); }
 .list-item .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .list-item .grow { flex: 1; min-width: 160px; }
 .list-item .grow > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -218,6 +223,20 @@ details > .stack, details > form { margin-top: 16px; }
 .divider { height: 1px; background: var(--outline-variant); }
 .hint { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); margin: 0; }
 
+/* folder picker */
+.picker { border-radius: 16px; background: var(--sc); overflow: hidden; --fbg: var(--sc); }
+.picker-bar { display: flex; align-items: center; gap: 4px; padding: 8px 12px 8px 8px; border-bottom: 1px solid var(--outline-variant); }
+.picker-bar .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 6px; }
+.picker-list { max-height: 300px; overflow-y: auto; padding: 0 8px 8px; }
+.pick-row { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left; }
+.pick-row::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: currentColor; opacity: 0; transition: opacity .15s; }
+.pick-row:hover::after { opacity: .08; }
+.pick-row .icon { color: var(--primary); }
+.pick-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-row .chip { height: 22px; }
+.picker-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--outline-variant); }
+.picker-foot .switch input { transform: scale(.75); margin: -4px -6px; }
+
 /* snackbar */
 .snackbar { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); z-index: 30; max-width: min(560px, calc(100vw - 32px)); padding: 14px 16px; border-radius: 4px; background: var(--inverse-surface); color: var(--inverse-on-surface); box-shadow: var(--shadow-3); opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; }
 .snackbar.show { opacity: 1; transform: translate(-50%, 0); }
@@ -227,8 +246,12 @@ details > .stack, details > form { margin-top: 16px; }
   .appbar { padding: 0 4px 0 12px; }
   .appbar .field { width: auto; flex: 1; }
   .brand b, .spacer { display: none; }
-  .board { grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible; }
-  .lane { min-height: 0; }
+  body { display: block; height: auto; }
+  .board { flex-direction: column; overflow: visible; padding-bottom: 96px; }
+  .lane, .lane.vacant { flex: none; min-width: 0; }
+  .lane-body { overflow: visible; padding-bottom: 8px; }
+  .lane.vacant .lane-body { display: none; }
+  .lane.vacant .lane-head { padding-bottom: 14px; }
   .grid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fab span:last-child { display: none; }
   .fab { padding: 0 16px; }
@@ -247,6 +270,7 @@ details > .stack, details > form { margin-top: 16px; }
   <div class="brand"><div class="logo"><span class="icon fill">view_kanban</span></div><b class="title-m">herdrboard</b></div>
   <label class="field dense"><span>Project</span><select id="projectFilter"></select></label>
   <span class="spacer"></span>
+  <a class="icon-btn" href="/docs" title="How to use herdrboard" aria-label="Docs"><span class="icon">menu_book</span></a>
   <button class="icon-btn" id="automationsBtn" title="Automations" aria-label="Automations"><span class="icon">schedule</span></button>
   <button class="icon-btn" id="projectsBtn" title="Projects" aria-label="Projects"><span class="icon">folder_open</span></button>
   <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings"><span class="icon">settings</span></button>
@@ -308,9 +332,27 @@ details > .stack, details > form { margin-top: 16px; }
 <dialog id="projectsDlg">
   <div class="dlg-head"><span class="icon">folder_open</span><span class="title-l">Projects</span><button class="icon-btn" data-close aria-label="Close"><span class="icon">close</span></button></div>
   <div class="dlg-body">
-    <form id="projectForm" class="actions" style="align-items:center;flex-wrap:nowrap">
-      <label class="field" style="flex:1"><span>Git repository</span><input name="path" placeholder="~/Documents/Experiments/my-repo" required></label>
-      <button class="btn filled"><span class="icon">add</span>Add</button>
+    <form id="projectForm" class="stack">
+      <div class="actions" style="align-items:center;flex-wrap:nowrap">
+        <label class="field" style="flex:1"><span>Git repository</span><input name="path" placeholder="~/Documents/Experiments/my-repo" required autocomplete="off" spellcheck="false"></label>
+        <button type="button" class="btn tonal" id="browseBtn"><span class="icon">folder_open</span>Browse</button>
+      </div>
+      <div class="picker" id="picker" hidden>
+        <div class="picker-bar">
+          <button type="button" class="icon-btn" id="pickUp" title="Parent folder" aria-label="Parent folder"><span class="icon">arrow_upward</span></button>
+          <button type="button" class="icon-btn" id="pickHome" title="Home" aria-label="Home folder"><span class="icon">home</span></button>
+          <span class="mono grow" id="pickPath"></span>
+          <span class="chip ok" id="pickGit" hidden><span class="icon">commit</span>git repo</span>
+        </div>
+        <div style="padding:16px 12px 8px"><label class="field dense"><span>Filter folders</span><input id="pickFilter" autocomplete="off" spellcheck="false"></label></div>
+        <div class="picker-list" id="pickList"></div>
+        <div class="picker-foot">
+          <label class="switch" style="gap:8px"><input type="checkbox" id="pickHidden"> Show hidden</label>
+          <span class="spacer"></span>
+          <button type="button" class="btn filled sm" id="pickUse">Use this folder</button>
+        </div>
+      </div>
+      <div class="actions" style="justify-content:flex-end"><button class="btn filled"><span class="icon">add</span>Add project</button></div>
     </form>
     <p class="hint">Adding a repository means you trust it. herdrboard answers Claude Code's folder-trust prompt for its worktrees. Agent overrides left on "Default" use Settings.</p>
     <div class="list" id="projectList"></div>
@@ -469,9 +511,9 @@ function renderBoard() {
   const html = S.lanes.map((lane) => {
     const list = cards.filter((c) => c.lane === lane && (lane !== "done" || c.updated_at > recent));
     const alert = lane === "needs_you" && list.length;
-    return `<section class="lane ${alert ? "alert" : ""}" data-lane="${lane}">
+    return `<section class="lane ${alert ? "alert" : ""} ${list.length ? "" : "vacant"}" data-lane="${lane}">
       <div class="lane-head">${icon(LANES[lane][1])}<span class="title-s">${LANES[lane][0]}</span><span class="badge ${alert ? "err" : ""}">${list.length}</span></div>
-      ${list.map(cardHtml).join("") || `<div class="empty">${lane === "todo" ? "Drop a card here to start it" : "Nothing here"}</div>`}
+      <div class="lane-body">${list.map(cardHtml).join("") || `<div class="empty">${lane === "todo" ? "Drop a card to start it" : "Empty"}</div>`}</div>
     </section>`;
   }).join("");
   if (html !== lastBoard) { $("#board").innerHTML = html; lastBoard = html; }
@@ -634,8 +676,56 @@ $("#projectList").addEventListener("click", (e) => {
 });
 $("#projectForm").onsubmit = (e) => {
   e.preventDefault();
-  act(async () => { await api("POST", "/api/projects", { path: e.target.path.value }); e.target.reset(); await refresh(); renderProjects(); }, "Project added");
+  act(async () => {
+    await api("POST", "/api/projects", { path: e.target.path.value });
+    e.target.reset(); $("#picker").hidden = true; await refresh(); renderProjects();
+  }, "Project added");
 };
+
+// Folder picker: browses the Mac's folders through /api/fs, mirrors the current one into the path field.
+let pick = null;
+async function browse(path) {
+  try {
+    pick = await api("GET", `/api/fs?${new URLSearchParams({ path, hidden: $("#pickHidden").checked ? "1" : "0" })}`);
+  } catch (e) { snack(e.message, true); return; }
+  $("#projectForm").path.value = pick.display;
+  $("#pickPath").textContent = pick.display;
+  $("#pickPath").title = pick.path;
+  $("#pickUp").disabled = !pick.parent;
+  $("#pickGit").hidden = !pick.git;
+  $("#pickFilter").value = "";
+  renderPick();
+}
+function renderPick() {
+  const q = $("#pickFilter").value.trim().toLowerCase();
+  const added = new Set(S.projects.map((p) => p.path));
+  const rows = pick.dirs.filter((d) => d.name.toLowerCase().includes(q)).map((d) => {
+    const full = `${pick.path.replace(/\/$/, "")}/${d.name}`;
+    return `<button type="button" class="pick-row" data-name="${esc(d.name)}">${icon(d.git ? "folder_special" : "folder", d.git ? "fill" : "")}<span class="name">${esc(d.name)}</span>
+      ${added.has(full) ? `<span class="chip tonal">added</span>` : d.git ? `<span class="chip">git</span>` : ""}</button>`;
+  });
+  $("#pickList").innerHTML = rows.join("") || `<p class="hint" style="padding:12px">No folders${q ? " match" : ""}.</p>`;
+}
+$("#browseBtn").onclick = () => {
+  const open = $("#picker").hidden;
+  $("#picker").hidden = !open;
+  if (open) browse($("#projectForm").path.value.trim());
+};
+$("#pickList").addEventListener("click", (e) => {
+  const row = e.target.closest(".pick-row");
+  if (row) browse(`${pick.path.replace(/\/$/, "")}/${row.dataset.name}`);
+});
+$("#pickUp").onclick = () => pick?.parent && browse(pick.parent);
+$("#pickHome").onclick = () => browse("~");
+$("#pickHidden").onchange = () => pick && browse(pick.path);
+$("#pickFilter").addEventListener("input", renderPick);
+$("#pickFilter").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const first = $("#pickList .pick-row");
+  if (first) first.click();
+});
+$("#pickUse").onclick = () => { $("#picker").hidden = true; $("#projectForm").path.focus(); };
 
 // ---- automations ---------------------------------------------------------
 function renderAutos() {

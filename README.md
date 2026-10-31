@@ -24,13 +24,15 @@ git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 open http://127.0.0.1:7420
 ```
 
+The full guide, with diagrams, is built into the board at **http://127.0.0.1:7420/docs** (the book icon in the top bar).
+
 ## Phone and other devices
 
 The board listens on `0.0.0.0:7420` (`HB_HOST` to change). Because agents can run with bypassed permissions, access from any other device needs a token. Run `hb url` on the Mac and open the link once on your phone: it sets a cookie and redirects to the board. The token lives in `~/.herdrboard/token` (mode 600); delete the file and restart to rotate it. This Mac (the CLI and agents) needs no token.
 
 This is plain HTTP, so only open it on a network you trust, or put it behind Tailscale.
 
-Add a project with **Projects** (or `hb project add <repo>`), check the profiles under **Settings**, then create a card.
+Add a project with **Projects → Browse** (a folder picker that marks git repositories), or `hb project add <repo>`,, check the profiles under **Settings**, then create a card.
 
 Adding a repository means you trust it. Claude Code asks "do you trust this folder?" for every new worktree, and herdrboard answers yes. It answers that prompt and no other.
 
