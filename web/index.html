@@ -4,38 +4,38 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>herdrboard</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%221%22 y=%222%22 width=%224%22 height=%2212%22 rx=%221.5%22 fill=%22%238B4F24%22/%3E%3Crect x=%226%22 y=%222%22 width=%224%22 height=%228%22 rx=%221.5%22 fill=%22%238B4F24%22/%3E%3Crect x=%2211%22 y=%222%22 width=%224%22 height=%225%22 rx=%221.5%22 fill=%22%238B4F24%22/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%221%22 y=%222%22 width=%224%22 height=%2212%22 rx=%221.5%22 fill=%22%230B57D0%22/%3E%3Crect x=%226%22 y=%222%22 width=%224%22 height=%228%22 rx=%221.5%22 fill=%22%230B57D0%22/%3E%3Crect x=%2211%22 y=%222%22 width=%224%22 height=%225%22 rx=%221.5%22 fill=%22%230B57D0%22/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600&family=Roboto+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=block">
 <style>
-/* Material 3 color roles, generated from seed #C2410C */
+/* Material 3 color roles: neutral surfaces, blue accent */
 :root {
-  --primary: #8b4f24; --on-primary: #fff; --primary-container: #ffdbc8; --on-primary-container: #351000;
-  --secondary: #765849; --secondary-container: #ffdbcc; --on-secondary-container: #2b160b;
-  --tertiary: #5f6135; --tertiary-container: #e5e6af; --on-tertiary-container: #1c1d00;
-  --error: #ba1a1a; --error-container: #ffdad6; --on-error-container: #410002;
-  --surface: #fff8f5; --on-surface: #221a15; --on-surface-variant: #52443c;
-  --outline: #85736b; --outline-variant: #d7c2b8;
-  --sc-lowest: #ffffff; --sc-low: #fff1ea; --sc: #fcebe3; --sc-high: #f6e5dd; --sc-highest: #f1dfd7;
-  --inverse-surface: #382e29; --inverse-on-surface: #ffede5; --inverse-primary: #ffb68b;
-  --ok: #3b6939; --ok-container: #bcf0b4;
+  --primary: #0b57d0; --on-primary: #fff; --primary-container: #d3e3fd; --on-primary-container: #041e49;
+  --secondary: #4a5f83; --secondary-container: #dde3ea; --on-secondary-container: #151c26;
+  --tertiary: #146c2e; --tertiary-container: #c4eed0; --on-tertiary-container: #072711;
+  --error: #b3261e; --error-container: #f9dedc; --on-error-container: #410e0b;
+  --surface: #f8f9fa; --on-surface: #1f1f1f; --on-surface-variant: #444746;
+  --outline: #747775; --outline-variant: #c4c7c5;
+  --sc-lowest: #ffffff; --sc-low: #f1f3f4; --sc: #eaecee; --sc-high: #e3e5e8; --sc-highest: #dcdfe2;
+  --inverse-surface: #303030; --inverse-on-surface: #f2f2f2; --inverse-primary: #a8c7fa;
+  --ok: #146c2e; --ok-container: #c4eed0;
   --shadow-1: 0 1px 2px rgb(0 0 0 / .3), 0 1px 3px 1px rgb(0 0 0 / .15);
   --shadow-3: 0 1px 3px rgb(0 0 0 / .3), 0 4px 8px 3px rgb(0 0 0 / .15);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --primary: #ffb68b; --on-primary: #522300; --primary-container: #6f380f; --on-primary-container: #ffdbc8;
-    --secondary: #e6beac; --secondary-container: #5d4134; --on-secondary-container: #ffdbcc;
-    --tertiary: #c8ca94; --tertiary-container: #47491f; --on-tertiary-container: #e5e6af;
-    --error: #ffb4ab; --error-container: #93000a; --on-error-container: #ffdad6;
-    --surface: #1a120d; --on-surface: #f0dfd7; --on-surface-variant: #d7c2b8;
-    --outline: #a08d84; --outline-variant: #52443c;
-    --sc-lowest: #140c08; --sc-low: #221a15; --sc: #271e19; --sc-high: #322823; --sc-highest: #3d332d;
-    --inverse-surface: #f0dfd7; --inverse-on-surface: #382e29; --inverse-primary: #8b4f24;
-    --ok: #a1d39a; --ok-container: #23501f;
+    --primary: #a8c7fa; --on-primary: #062e6f; --primary-container: #0842a0; --on-primary-container: #d3e3fd;
+    --secondary: #b9c7e0; --secondary-container: #3b4858; --on-secondary-container: #dde3ea;
+    --tertiary: #6dd58c; --tertiary-container: #0f5223; --on-tertiary-container: #c4eed0;
+    --error: #f2b8b5; --error-container: #8c1d18; --on-error-container: #f9dedc;
+    --surface: #131314; --on-surface: #e3e3e3; --on-surface-variant: #c4c7c5;
+    --outline: #8e918f; --outline-variant: #444746;
+    --sc-lowest: #0e0e0f; --sc-low: #1b1b1c; --sc: #1f1f20; --sc-high: #282829; --sc-highest: #333335;
+    --inverse-surface: #e3e3e3; --inverse-on-surface: #303030; --inverse-primary: #0b57d0;
+    --ok: #6dd58c; --ok-container: #0f5223;
     color-scheme: dark;
   }
 }
@@ -115,6 +115,7 @@ button, input, select, textarea { font: inherit; color: inherit; letter-spacing:
 .field.dense input, .field.dense select { min-height: 40px; padding-top: 8px; padding-bottom: 8px; }
 .field.dense input:focus, .field.dense select:focus { padding-top: 7px; padding-bottom: 7px; }
 .field.dense select { background-position: calc(100% - 19px) 18px, calc(100% - 14px) 18px; }
+.role .field select { padding-left: 10px; padding-right: 26px; background-position: calc(100% - 15px) 18px, calc(100% - 10px) 18px; }
 .grid { display: grid; gap: 16px 12px; }
 .grid.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
