@@ -19,6 +19,7 @@ Backlog → Todo → Working → Review → Ready → Done
 Requires `bun`, `herdr` (with its server running), and `git`.
 
 ```sh
+git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 ./scripts/install.sh      # bun link (puts `hb` on PATH) + launchd agent dev.dzaky.herdrboard
 open http://127.0.0.1:7420
 ```
@@ -40,6 +41,16 @@ hb card add "Title" --brief "…"          # orchestrator
 ```
 
 Agents are started with `HB_CARD`, `HB_ROLE`, `HB_URL` (and `HB_PROJECT` for the orchestrator) in their environment, so these commands need no ids.
+
+## Agent skill
+
+Teach any coding agent to use the board:
+
+```sh
+npx skills add dzakybd/herdrboard
+```
+
+The skill (`skills/herdrboard/SKILL.md`) covers filing cards, watching progress, the orchestrator, automations, and the `hb done` / `hb review` / `hb ask` reports.
 
 ## How it talks to herdr
 
