@@ -1,0 +1,16 @@
+{
+  "name": "herdrboard",
+  "version": "0.1.0",
+  "description": "Kanban + automation for coding agents running in herdr",
+  "type": "module",
+  "bin": { "hb": "src/cli.ts" },
+  "scripts": {
+    "serve": "bun src/cli.ts serve",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}
