@@ -4,206 +4,387 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>herdrboard</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%221%22 y=%222%22 width=%224%22 height=%2212%22 rx=%221%22 fill=%22%23c2410c%22/%3E%3Crect x=%226%22 y=%222%22 width=%224%22 height=%228%22 rx=%221%22 fill=%22%23c2410c%22/%3E%3Crect x=%2211%22 y=%222%22 width=%224%22 height=%225%22 rx=%221%22 fill=%22%23c2410c%22/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect x=%221%22 y=%222%22 width=%224%22 height=%2212%22 rx=%221.5%22 fill=%22%238B4F24%22/%3E%3Crect x=%226%22 y=%222%22 width=%224%22 height=%228%22 rx=%221.5%22 fill=%22%238B4F24%22/%3E%3Crect x=%2211%22 y=%222%22 width=%224%22 height=%225%22 rx=%221.5%22 fill=%22%238B4F24%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600&family=Roboto+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=block">
 <style>
+/* Material 3 color roles, generated from seed #C2410C */
 :root {
-  --bg: #f6f5f2; --panel: #ffffff; --lane: #eceae5; --ink: #1d1c1a; --muted: #6b6862; --line: #dcd9d2;
-  --accent: #c2410c; --accent-ink: #fff; --warn-bg: #fdecc8; --warn-ink: #7a4b00; --ok: #2f7d4f; --bad: #b42318;
-  --shadow: 0 1px 2px rgb(0 0 0 / .06), 0 1px 1px rgb(0 0 0 / .04);
+  --primary: #8b4f24; --on-primary: #fff; --primary-container: #ffdbc8; --on-primary-container: #351000;
+  --secondary: #765849; --secondary-container: #ffdbcc; --on-secondary-container: #2b160b;
+  --tertiary: #5f6135; --tertiary-container: #e5e6af; --on-tertiary-container: #1c1d00;
+  --error: #ba1a1a; --error-container: #ffdad6; --on-error-container: #410002;
+  --surface: #fff8f5; --on-surface: #221a15; --on-surface-variant: #52443c;
+  --outline: #85736b; --outline-variant: #d7c2b8;
+  --sc-lowest: #ffffff; --sc-low: #fff1ea; --sc: #fcebe3; --sc-high: #f6e5dd; --sc-highest: #f1dfd7;
+  --inverse-surface: #382e29; --inverse-on-surface: #ffede5; --inverse-primary: #ffb68b;
+  --ok: #3b6939; --ok-container: #bcf0b4;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .3), 0 1px 3px 1px rgb(0 0 0 / .15);
+  --shadow-3: 0 1px 3px rgb(0 0 0 / .3), 0 4px 8px 3px rgb(0 0 0 / .15);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #141412; --panel: #1f1e1b; --lane: #191816; --ink: #ecebe7; --muted: #9a968e; --line: #2f2d29;
-    --accent: #f26b2a; --accent-ink: #160b05; --warn-bg: #3a2c10; --warn-ink: #f4c26b; --ok: #5cc28a; --bad: #f97066;
-    --shadow: none; color-scheme: dark;
+    --primary: #ffb68b; --on-primary: #522300; --primary-container: #6f380f; --on-primary-container: #ffdbc8;
+    --secondary: #e6beac; --secondary-container: #5d4134; --on-secondary-container: #ffdbcc;
+    --tertiary: #c8ca94; --tertiary-container: #47491f; --on-tertiary-container: #e5e6af;
+    --error: #ffb4ab; --error-container: #93000a; --on-error-container: #ffdad6;
+    --surface: #1a120d; --on-surface: #f0dfd7; --on-surface-variant: #d7c2b8;
+    --outline: #a08d84; --outline-variant: #52443c;
+    --sc-lowest: #140c08; --sc-low: #221a15; --sc: #271e19; --sc-high: #322823; --sc-highest: #3d332d;
+    --inverse-surface: #f0dfd7; --inverse-on-surface: #382e29; --inverse-primary: #8b4f24;
+    --ok: #a1d39a; --ok-container: #23501f;
+    color-scheme: dark;
   }
 }
+
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
-button, input, select, textarea { font: inherit; color: inherit; }
-button { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
-button:hover { border-color: var(--muted); }
-button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-button.danger { color: var(--bad); }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-input, select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; min-width: 0; }
-textarea { width: 100%; resize: vertical; }
-label { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
-label > * { color: var(--ink); font-size: 14px; }
-label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); }
-code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+html, body { margin: 0; }
+body {
+  background: var(--surface); color: var(--on-surface);
+  font: 400 14px/20px "Roboto Flex", Roboto, system-ui, sans-serif; letter-spacing: .01em;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+.mono { font-family: "Roboto Mono", ui-monospace, monospace; font-size: 12px; }
+.icon { font-family: "Material Symbols Rounded"; font-weight: normal; font-style: normal; font-size: 20px; line-height: 1; display: inline-block; white-space: nowrap; direction: ltr; font-feature-settings: "liga"; -webkit-font-feature-settings: "liga"; user-select: none; flex: none; }
+.icon.fill { font-variation-settings: "FILL" 1; }
+.title-l { font-size: 22px; line-height: 28px; font-weight: 400; }
+.title-m { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: .01em; }
+.title-s { font-size: 14px; line-height: 20px; font-weight: 500; }
+.body-s { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
+.muted { color: var(--on-surface-variant); }
+[hidden] { display: none !important; }
 
-header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-header h1 { font-size: 16px; margin: 0 8px 0 0; letter-spacing: -.01em; }
-header h1 span { color: var(--accent); }
-header .spacer { flex: 1; }
-#orch { display: flex; gap: 8px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-#orch input { flex: 1; min-width: 200px; }
-#orch[hidden] { display: none; }
-#orch .who { color: var(--muted); font-size: 12px; }
+/* --- buttons (state layer via ::after) --- */
+.btn, .icon-btn, .chip, .fab { position: relative; overflow: hidden; cursor: pointer; border: 0; background: none; -webkit-tap-highlight-color: transparent; }
+.btn::after, .icon-btn::after, .fab::after, .card::after {
+  content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0; transition: opacity .15s; pointer-events: none; border-radius: inherit;
+}
+.btn:hover::after, .icon-btn:hover::after, .fab:hover::after, .card:hover::after { opacity: .08; }
+.btn:active::after, .icon-btn:active::after, .fab:active::after, .card:active::after { opacity: .12; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 24px; border-radius: 20px; font-weight: 500; letter-spacing: .01em; white-space: nowrap; }
+.btn .icon { font-size: 18px; margin-left: -8px; }
+.btn.filled { background: var(--primary); color: var(--on-primary); }
+.btn.tonal { background: var(--secondary-container); color: var(--on-secondary-container); }
+.btn.outlined { border: 1px solid var(--outline); color: var(--primary); }
+.btn.text { color: var(--primary); padding: 0 12px; }
+.btn.text .icon { margin-left: 0; }
+.btn.danger { color: var(--error); }
+.btn:disabled { opacity: .38; cursor: default; }
+.btn.sm { height: 32px; padding: 0 16px; border-radius: 16px; font-size: 13px; }
+.icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 20px; color: var(--on-surface-variant); }
+.icon-btn.sm { width: 32px; height: 32px; }
+.icon-btn.filled { background: var(--primary); color: var(--on-primary); }
+.icon-btn:disabled { opacity: .38; cursor: default; }
+.fab {
+  position: fixed; right: 24px; bottom: 24px; z-index: 6; display: inline-flex; align-items: center; gap: 12px;
+  height: 56px; padding: 0 20px 0 16px; border-radius: 16px; background: var(--primary-container); color: var(--on-primary-container);
+  box-shadow: var(--shadow-3); font-weight: 500;
+}
+.fab .icon { font-size: 24px; }
 
-#board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(230px, 1fr); gap: 10px; padding: 12px 16px; overflow-x: auto; min-height: calc(100vh - 110px); align-items: start; }
-.lane { background: var(--lane); border-radius: 8px; padding: 8px; min-height: 120px; }
-.lane h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 2px 4px 8px; display: flex; justify-content: space-between; }
-.lane.over { outline: 2px dashed var(--accent); }
-.lane[data-lane="needs_you"] h2 { color: var(--accent); }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; margin-bottom: 7px; cursor: pointer; box-shadow: var(--shadow); }
-.card:hover { border-color: var(--muted); }
-.card .t { font-weight: 550; }
-.card .meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; color: var(--muted); font-size: 12px; }
-.card .why { margin-top: 6px; background: var(--warn-bg); color: var(--warn-ink); border-radius: 5px; padding: 4px 6px; font-size: 12px; white-space: pre-wrap; max-height: 4.2em; overflow: hidden; }
-.pill { border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+/* --- chips & badges --- */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; font-weight: 500; cursor: default; }
+.chip .icon { font-size: 16px; }
+.chip.tonal { border-color: transparent; background: var(--secondary-container); color: var(--on-secondary-container); }
+.chip.tertiary { border-color: transparent; background: var(--tertiary-container); color: var(--on-tertiary-container); }
+.chip.err { border-color: transparent; background: var(--error-container); color: var(--on-error-container); }
+.chip.ok { border-color: transparent; background: var(--ok-container); color: var(--ok); }
+.badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; display: inline-grid; place-items: center; background: var(--sc-highest); color: var(--on-surface-variant); font-size: 11px; font-weight: 600; }
+.badge.err { background: var(--error); color: var(--on-primary); }
 
-aside#drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: var(--panel); border-left: 1px solid var(--line); padding: 16px; overflow-y: auto; transform: translateX(100%); transition: transform .15s; z-index: 5; }
-aside#drawer.open { transform: none; }
-aside h3 { margin: 0 30px 4px 0; font-size: 17px; }
-aside .close { position: absolute; top: 12px; right: 12px; }
-aside section { margin-top: 14px; }
-aside .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.brief { white-space: pre-wrap; background: var(--bg); border-radius: 6px; padding: 8px; max-height: 240px; overflow: auto; }
-.events { list-style: none; margin: 0; padding: 0; font-size: 12px; }
-.events li { padding: 4px 0; border-top: 1px solid var(--line); white-space: pre-wrap; }
-.events time { color: var(--muted); margin-right: 6px; }
-.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
-.row > label { flex: 1; min-width: 120px; }
+/* --- form fields (outlined) --- */
+.field { position: relative; display: block; min-width: 0; }
+.field > span { position: absolute; left: 10px; top: -8px; padding: 0 4px; background: var(--fbg, var(--surface)); color: var(--on-surface-variant); font-size: 12px; line-height: 16px; pointer-events: none; transition: color .15s; }
+.field input, .field select, .field textarea {
+  width: 100%; min-height: 48px; padding: 12px 14px; border: 1px solid var(--outline); border-radius: 4px; background: transparent; outline: none;
+}
+.field select { appearance: none; padding-right: 36px; background-image: linear-gradient(45deg, transparent 50%, var(--on-surface-variant) 50%), linear-gradient(135deg, var(--on-surface-variant) 50%, transparent 50%); background-position: calc(100% - 19px) 22px, calc(100% - 14px) 22px; background-size: 5px 5px; background-repeat: no-repeat; }
+.field select option { background: var(--sc-high); color: var(--on-surface); }
+.field textarea { resize: vertical; min-height: 96px; line-height: 20px; }
+.field input:hover, .field select:hover, .field textarea:hover { border-color: var(--on-surface); }
+.field input:focus, .field select:focus, .field textarea:focus { border: 2px solid var(--primary); padding: 11px 13px; }
+.field select:focus { padding-right: 35px; }
+.field:focus-within > span { color: var(--primary); }
+.field input:disabled, .field select:disabled { opacity: .38; }
+.field.dense input, .field.dense select { min-height: 40px; padding-top: 8px; padding-bottom: 8px; }
+.field.dense input:focus, .field.dense select:focus { padding-top: 7px; padding-bottom: 7px; }
+.field.dense select { background-position: calc(100% - 19px) 18px, calc(100% - 14px) 18px; }
+.grid { display: grid; gap: 16px 12px; }
+.grid.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
-dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 16px; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
-dialog::backdrop { background: rgb(0 0 0 / .35); }
-dialog h3 { margin: 0 0 12px; }
-dialog form > * + * { margin-top: 10px; }
-dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-td, th { text-align: left; padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
-th { color: var(--muted); font-weight: 500; font-size: 12px; }
-td input, td select { width: 100%; }
-.hint { color: var(--muted); font-size: 12px; }
+/* switch */
+.switch { display: inline-flex; align-items: center; gap: 12px; cursor: pointer; user-select: none; }
+.switch input { appearance: none; position: relative; width: 52px; height: 32px; margin: 0; border-radius: 16px; border: 2px solid var(--outline); background: var(--sc-highest); cursor: pointer; transition: background .15s, border-color .15s; flex: none; }
+.switch input::before { content: ""; position: absolute; top: 6px; left: 6px; width: 16px; height: 16px; border-radius: 50%; background: var(--outline); transition: all .15s; }
+.switch input:checked { background: var(--primary); border-color: var(--primary); }
+.switch input:checked::before { left: 22px; top: 2px; width: 24px; height: 24px; background: var(--on-primary); }
+.switch input:disabled { opacity: .38; cursor: default; }
 
-#toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100vw - 32px); z-index: 20; }
-#toast.show { opacity: 1; }
-#toast.err { background: var(--bad); color: #fff; }
+/* --- top app bar --- */
+.appbar { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; gap: 8px; height: 64px; padding: 0 12px 0 16px; background: var(--surface); --fbg: var(--surface); transition: background .15s; }
+.appbar.scrolled { background: var(--sc); --fbg: var(--sc); }
+.brand { display: flex; align-items: center; gap: 10px; margin-right: 8px; }
+.brand .logo { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); }
+.appbar .field { width: 220px; }
+.spacer { flex: 1; }
 
-@media (max-width: 640px) {
-  #board { grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible; }
+/* --- orchestrator --- */
+.orch { margin: 4px 16px 0; padding: 12px 12px 12px 16px; border-radius: 16px; background: var(--sc-low); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.orch .avatar { width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--tertiary-container); color: var(--on-tertiary-container); flex: none; }
+.orch .who { display: grid; gap: 2px; min-width: 150px; }
+.composer { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 4px; height: 48px; padding: 0 4px 0 16px; border-radius: 24px; background: var(--sc-highest); }
+.composer input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; height: 100%; }
+.composer:focus-within { outline: 2px solid var(--primary); }
+
+/* --- board --- */
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(264px, 1fr); gap: 12px; padding: 16px 16px 96px; overflow-x: auto; align-items: start; }
+.lane { border-radius: 16px; background: var(--sc-low); padding: 8px; min-height: 160px; transition: background .15s, outline-color .15s; outline: 2px dashed transparent; outline-offset: -2px; }
+.lane.over { outline-color: var(--primary); background: var(--sc); }
+.lane-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 12px; color: var(--on-surface-variant); }
+.lane-head .icon { font-size: 18px; }
+.lane-head .title-s { flex: 1; color: var(--on-surface); }
+.lane.alert { background: color-mix(in srgb, var(--error-container) 45%, var(--sc-low)); }
+.lane.alert .lane-head, .lane.alert .lane-head .title-s { color: var(--error); }
+.empty { padding: 20px 8px; text-align: center; color: var(--on-surface-variant); font-size: 12px; opacity: .8; }
+
+.card { position: relative; display: grid; gap: 8px; padding: 12px 14px; margin-bottom: 8px; border-radius: 12px; background: var(--sc-lowest); box-shadow: var(--shadow-1); cursor: pointer; }
+@media (prefers-color-scheme: dark) { .card { background: var(--sc-high); box-shadow: none; } }
+.card:hover { box-shadow: var(--shadow-3); }
+.card.dragging { opacity: .5; }
+.card .t { font-weight: 500; font-size: 14px; line-height: 20px; }
+.status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--on-surface-variant); min-width: 0; }
+.status span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--outline); flex: none; display: inline-block; }
+.dot.working { background: var(--primary); animation: pulse 1.4s ease-in-out infinite; }
+.dot.blocked { background: var(--error); }
+.dot.idle, .dot.done { background: var(--ok); }
+@keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .dot.working { animation: none; } * { transition: none !important; } }
+.why { padding: 8px 10px; border-radius: 8px; background: var(--error-container); color: var(--on-error-container); font-size: 12px; line-height: 16px; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* --- side sheet --- */
+.scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .32); z-index: 7; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.scrim.open { opacity: 1; pointer-events: auto; }
+.sheet { position: fixed; top: 0; right: 0; bottom: 0; z-index: 8; width: min(560px, 100vw); background: var(--sc-low); border-radius: 16px 0 0 16px; box-shadow: var(--shadow-3); display: flex; flex-direction: column; transform: translateX(105%); transition: transform .25s cubic-bezier(.2, 0, 0, 1); --fbg: var(--sc-low); }
+.sheet.open { transform: none; }
+.sheet-head { display: flex; align-items: flex-start; gap: 8px; padding: 20px 12px 8px 24px; }
+.sheet-head > div { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.sheet-body { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+.section { margin-top: 20px; display: grid; gap: 12px; }
+.section > h4 { margin: 0; font-size: 14px; font-weight: 500; color: var(--on-surface-variant); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.prose { white-space: pre-wrap; padding: 12px 14px; border-radius: 12px; background: var(--sc-highest); max-height: 260px; overflow: auto; }
+.role { display: grid; gap: 14px; padding: 14px 16px 16px; border-radius: 12px; border: 1px solid var(--outline-variant); }
+.role-head { display: flex; align-items: center; gap: 8px; }
+.role-head .icon { color: var(--on-surface-variant); }
+.role-head .title-s { flex: 1; }
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li { position: relative; padding: 0 0 14px 22px; font-size: 13px; white-space: pre-wrap; }
+.timeline li::before { content: ""; position: absolute; left: 4px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--outline); }
+.timeline li::after { content: ""; position: absolute; left: 7.5px; top: 18px; bottom: 0; width: 1px; background: var(--outline-variant); }
+.timeline li:last-child::after { display: none; }
+.timeline li:first-child::before { background: var(--primary); }
+.timeline time { display: block; font-size: 11px; color: var(--on-surface-variant); }
+
+/* --- dialogs --- */
+dialog { border: 0; padding: 0; border-radius: 28px; background: var(--sc-high); color: var(--on-surface); width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); box-shadow: var(--shadow-3); --fbg: var(--sc-high); }
+dialog::backdrop { background: rgb(0 0 0 / .32); }
+dialog[open] { display: flex; flex-direction: column; animation: rise .2s cubic-bezier(.2, 0, 0, 1); }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+.dlg-head { display: flex; align-items: center; gap: 16px; padding: 24px 24px 16px; }
+.dlg-head > .icon { color: var(--secondary); font-size: 24px; }
+.dlg-head .title-l { flex: 1; }
+.dlg-body { padding: 8px 24px 0; overflow-y: auto; display: grid; gap: 20px; align-content: start; }
+.dlg-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 20px 24px 24px; }
+.list { display: grid; gap: 8px; }
+.list-item { position: relative; display: grid; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--sc-low); --fbg: var(--sc-low); }
+.list-item .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.list-item .grow { flex: 1; min-width: 160px; }
+.list-item .grow > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; color: var(--primary); font-weight: 500; font-size: 13px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary .icon { transition: transform .15s; font-size: 18px; }
+details[open] > summary .icon { transform: rotate(90deg); }
+details > .stack, details > form { margin-top: 16px; }
+.stack { display: grid; gap: 16px; }
+.divider { height: 1px; background: var(--outline-variant); }
+.hint { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); margin: 0; }
+
+/* snackbar */
+.snackbar { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); z-index: 30; max-width: min(560px, calc(100vw - 32px)); padding: 14px 16px; border-radius: 4px; background: var(--inverse-surface); color: var(--inverse-on-surface); box-shadow: var(--shadow-3); opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; }
+.snackbar.show { opacity: 1; transform: translate(-50%, 0); }
+.snackbar.err { background: var(--error-container); color: var(--on-error-container); }
+
+@media (max-width: 720px) {
+  .appbar { padding: 0 4px 0 12px; }
+  .appbar .field { width: auto; flex: 1; }
+  .brand b, .spacer { display: none; }
+  .board { grid-auto-flow: row; grid-auto-columns: auto; overflow-x: visible; }
   .lane { min-height: 0; }
-  header { padding: 10px; }
+  .grid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fab span:last-child { display: none; }
+  .fab { padding: 0 16px; }
+  .sheet { border-radius: 0; }
+  .sheet-head { padding-left: 16px; }
+  .sheet-body { padding: 0 16px 24px; }
+  .orch .who { display: none; }
+  .orch .btn { flex: 1; }
+  dialog { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+  .dlg-head, .dlg-body, .dlg-foot { padding-left: 16px; padding-right: 16px; }
 }
 </style>
 </head>
 <body>
-<header>
-  <h1>herdr<span>board</span></h1>
-  <select id="projectFilter" aria-label="Project"></select>
+<header class="appbar" id="appbar">
+  <div class="brand"><div class="logo"><span class="icon fill">view_kanban</span></div><b class="title-m">herdrboard</b></div>
+  <label class="field dense"><span>Project</span><select id="projectFilter"></select></label>
   <span class="spacer"></span>
-  <button class="primary" id="newCardBtn">New card</button>
-  <button id="projectsBtn">Projects</button>
-  <button id="automationsBtn">Automations</button>
-  <button id="settingsBtn">Settings</button>
+  <button class="icon-btn" id="automationsBtn" title="Automations" aria-label="Automations"><span class="icon">schedule</span></button>
+  <button class="icon-btn" id="projectsBtn" title="Projects" aria-label="Projects"><span class="icon">folder_open</span></button>
+  <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings"><span class="icon">settings</span></button>
 </header>
-<div id="orch" hidden>
-  <button id="orchStart"></button>
-  <input id="orchText" placeholder="Tell the orchestrator what you want built…" aria-label="Message to orchestrator">
-  <button id="orchSend">Send</button>
-  <span class="who" id="orchWho"></span>
-</div>
-<main id="board"></main>
 
-<aside id="drawer" aria-label="Card details">
-  <button class="close" id="drawerClose" aria-label="Close">✕</button>
-  <div id="drawerBody"></div>
-  <section id="replyBox" hidden>
-    <label>Reply to the agent
-      <textarea id="replyText" rows="3" placeholder="Sent with herdr agent prompt"></textarea>
-    </label>
-    <div class="actions" style="margin-top:6px"><button id="replySend" class="primary">Send</button></div>
-  </section>
-  <section><ul class="events" id="drawerEvents"></ul></section>
+<section class="orch" id="orch" hidden>
+  <div class="avatar"><span class="icon">hub</span></div>
+  <div class="who"><span class="title-s">Orchestrator</span><span class="body-s" id="orchWho"></span></div>
+  <div class="composer">
+    <input id="orchText" placeholder="Tell the orchestrator what to build…" aria-label="Message to the orchestrator">
+    <button class="icon-btn filled sm" id="orchSend" title="Send" aria-label="Send"><span class="icon">arrow_upward</span></button>
+  </div>
+  <button class="btn tonal" id="orchStart"></button>
+</section>
+
+<main class="board" id="board"></main>
+
+<button class="fab" id="newCardBtn" aria-label="New card"><span class="icon">add</span><span>New card</span></button>
+
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="sheet" aria-label="Card details">
+  <div class="sheet-head">
+    <div id="sheetHead"></div>
+    <button class="icon-btn" id="sheetClose" aria-label="Close"><span class="icon">close</span></button>
+  </div>
+  <div class="sheet-body">
+    <div id="sheetBody"></div>
+    <div class="section" id="replyBox" hidden>
+      <h4>Reply to the agent</h4>
+      <div class="composer">
+        <input id="replyText" placeholder="Sent to the running agent" aria-label="Reply to the agent">
+        <button class="icon-btn filled sm" id="replySend" title="Send" aria-label="Send reply"><span class="icon">arrow_upward</span></button>
+      </div>
+    </div>
+    <div class="section"><h4>Activity</h4><ul class="timeline" id="sheetEvents"></ul></div>
+  </div>
 </aside>
 
 <dialog id="cardDlg">
-  <form method="dialog" id="cardForm">
-    <h3>New card</h3>
-    <div class="row">
-      <label>Project <select name="project_id" required></select></label>
-      <label>Lane <select name="lane"><option value="todo">Todo (start now)</option><option value="backlog">Backlog</option></select></label>
+  <form method="dialog" id="cardForm" style="display:contents">
+    <div class="dlg-head"><span class="icon">add_task</span><span class="title-l">New card</span></div>
+    <div class="dlg-body">
+      <div class="grid c2">
+        <label class="field"><span>Project</span><select name="project_id" required></select></label>
+        <label class="field"><span>Lane</span><select name="lane"><option value="todo">Todo (start now)</option><option value="backlog">Backlog</option></select></label>
+      </div>
+      <label class="field"><span>Title</span><input name="title" required autocomplete="off"></label>
+      <label class="field"><span>Brief</span><textarea name="brief" rows="6" placeholder="Everything the worker needs. It sees only this."></textarea></label>
+      <div class="actions" style="gap:24px">
+        <label class="switch"><input type="checkbox" name="review"> Agent review</label>
+        <label class="switch"><input type="checkbox" name="worktree" checked> Own worktree</label>
+      </div>
+      <details><summary><span class="icon">chevron_right</span>Agent settings</summary><div class="stack" id="cardRoles"></div></details>
     </div>
-    <label>Title <input name="title" required autocomplete="off"></label>
-    <label>Brief <textarea name="brief" rows="7" placeholder="Everything the worker needs to know. It sees only this."></textarea></label>
-    <div class="row">
-      <label>Worker <select name="worker"></select></label>
-      <label>Reviewer <select name="reviewer"></select></label>
-    </div>
-    <div class="row">
-      <label class="check"><input type="checkbox" name="review"> Review by an agent</label>
-      <label class="check"><input type="checkbox" name="worktree" checked> Own worktree</label>
-    </div>
-    <div class="foot"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Create</button></div>
+    <div class="dlg-foot"><button class="btn text" value="cancel" formnovalidate>Cancel</button><button class="btn filled" value="ok">Create</button></div>
   </form>
 </dialog>
 
 <dialog id="projectsDlg">
-  <h3>Projects</h3>
-  <table><thead><tr><th>Name</th><th>Base</th><th>Review</th><th>Orchestrator</th><th>Worker</th><th>Reviewer</th><th></th></tr></thead><tbody id="projectRows"></tbody></table>
-  <form id="projectForm" class="row" style="margin-top:12px">
-    <label style="flex:3">Add a git repository <input name="path" placeholder="~/Documents/Experiments/my-repo" required></label>
-    <button class="primary">Add</button>
-  </form>
-  <p class="hint">Adding a repository means you trust it: herdrboard answers Claude Code's folder-trust prompt for its worktrees. Empty profile = the default from Settings.</p>
-  <div class="foot"><button onclick="this.closest('dialog').close()">Close</button></div>
+  <div class="dlg-head"><span class="icon">folder_open</span><span class="title-l">Projects</span><button class="icon-btn" data-close aria-label="Close"><span class="icon">close</span></button></div>
+  <div class="dlg-body">
+    <form id="projectForm" class="actions" style="align-items:center;flex-wrap:nowrap">
+      <label class="field" style="flex:1"><span>Git repository</span><input name="path" placeholder="~/Documents/Experiments/my-repo" required></label>
+      <button class="btn filled"><span class="icon">add</span>Add</button>
+    </form>
+    <p class="hint">Adding a repository means you trust it. herdrboard answers Claude Code's folder-trust prompt for its worktrees. Agent overrides left on "Default" use Settings.</p>
+    <div class="list" id="projectList"></div>
+  </div>
+  <div class="dlg-foot"></div>
 </dialog>
 
 <dialog id="autoDlg">
-  <h3>Automations</h3>
-  <table><thead><tr><th>Name</th><th>Trigger</th><th>Project</th><th>Next</th><th>On</th><th></th></tr></thead><tbody id="autoRows"></tbody></table>
-  <form id="autoForm" style="margin-top:14px">
-    <div class="row">
-      <label>Name <input name="name" required placeholder="pr-review-sweep"></label>
-      <label>Trigger <input name="trigger" required placeholder="every 30m · daily 09:00 · weekly mon 09:00"></label>
-      <label>Project <select name="project_id" required></select></label>
-    </div>
-    <label>Card title <input name="title" required></label>
-    <label>Brief <textarea name="brief" rows="4"></textarea></label>
-    <div class="row">
-      <label>Worker <select name="worker"></select></label>
-      <label>Reviewer <select name="reviewer"></select></label>
-      <label class="check"><input type="checkbox" name="review"> Review</label>
-      <label class="check"><input type="checkbox" name="worktree"> Own worktree</label>
-      <button class="primary">Add automation</button>
-    </div>
-  </form>
-  <p class="hint">Each fire creates a card in Todo. If the previous card from the same automation is still open, the fire is skipped.</p>
-  <div class="foot"><button onclick="this.closest('dialog').close()">Close</button></div>
+  <div class="dlg-head"><span class="icon">schedule</span><span class="title-l">Automations</span><button class="icon-btn" data-close aria-label="Close"><span class="icon">close</span></button></div>
+  <div class="dlg-body">
+    <div class="list" id="autoList"></div>
+    <details id="autoAdd"><summary><span class="icon">chevron_right</span>New automation</summary>
+      <form id="autoForm" class="stack">
+        <div class="grid c2">
+          <label class="field"><span>Name</span><input name="name" required placeholder="pr-review-sweep"></label>
+          <label class="field"><span>Trigger</span><input name="trigger" required placeholder="every 30m · daily 09:00 · weekly mon 09:00"></label>
+        </div>
+        <div class="grid c2">
+          <label class="field"><span>Project</span><select name="project_id" required></select></label>
+          <label class="field"><span>Card title</span><input name="title" required></label>
+        </div>
+        <label class="field"><span>Brief</span><textarea name="brief" rows="4"></textarea></label>
+        <div class="actions" style="gap:24px">
+          <label class="switch"><input type="checkbox" name="review"> Agent review</label>
+          <label class="switch"><input type="checkbox" name="worktree"> Own worktree</label>
+        </div>
+        <div class="stack" id="autoRoles"></div>
+        <div class="actions" style="justify-content:flex-end"><button class="btn filled"><span class="icon">add</span>Add automation</button></div>
+      </form>
+    </details>
+    <p class="hint">Each fire creates a card in Todo. If the previous card from the same automation is still open, the fire is skipped.</p>
+  </div>
+  <div class="dlg-foot"></div>
 </dialog>
 
 <dialog id="settingsDlg">
-  <form id="settingsForm">
-    <h3>Settings</h3>
-    <table><thead><tr><th>Profile</th><th>Command typed into the herdr pane</th><th></th></tr></thead><tbody id="profileRows"></tbody></table>
-    <button type="button" id="addProfile">Add profile</button>
-    <p class="hint">Profiles run in your interactive zsh, so functions from ~/.zshrc (cc1, cc2, …) work.</p>
-    <div class="row">
-      <label>Orchestrator <select name="orchestrator"></select></label>
-      <label>Worker <select name="worker"></select></label>
-      <label>Reviewer <select name="reviewer"></select></label>
+  <form id="settingsForm" style="display:contents">
+    <div class="dlg-head"><span class="icon">settings</span><span class="title-l">Settings</span></div>
+    <div class="dlg-body">
+      <div class="stack">
+        <span class="title-s">Profiles</span>
+        <p class="hint">A profile is the command typed into the herdr pane. It runs in your interactive zsh, so ~/.zshrc functions (cc1, cc2, …) work. Model, effort and mode are appended as <span class="mono">--model</span>, <span class="mono">--effort</span> and <span class="mono">--permission-mode</span>.</p>
+        <div class="stack" id="profileRows"></div>
+        <div><button type="button" class="btn text" id="addProfile"><span class="icon">add</span>Add profile</button></div>
+      </div>
+      <div class="divider"></div>
+      <div class="stack"><span class="title-s">Default agents</span><div class="stack" id="settingsRoles"></div></div>
+      <div class="divider"></div>
+      <div class="grid c2">
+        <label class="field"><span>Max parallel workers</span><input name="maxWorkers" type="number" min="1"></label>
+        <label class="field"><span>Max review rounds</span><input name="maxRounds" type="number" min="0"></label>
+      </div>
     </div>
-    <div class="row">
-      <label>Max parallel workers <input name="maxWorkers" type="number" min="1"></label>
-      <label>Max review rounds <input name="maxRounds" type="number" min="0"></label>
-    </div>
-    <div class="foot"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Save</button></div>
+    <div class="dlg-foot"><button type="button" class="btn text" data-close>Cancel</button><button class="btn filled">Save</button></div>
   </form>
 </dialog>
 
-<div id="toast" role="status"></div>
+<datalist id="models"><option value="opus"><option value="sonnet"><option value="haiku"><option value="fable"><option value="opus[1m]"></datalist>
+<div class="snackbar" id="snackbar" role="status"></div>
 
 <script>
-const LABEL = { backlog: "Backlog", todo: "Todo", working: "Working", review: "Review", needs_you: "Needs you", ready: "Ready", done: "Done" };
-let S = null;
-let openCard = null;
-let dragging = false;
-let filter = localStorage.getItem("hb.project") ?? "";
+const LANES = {
+  backlog: ["Backlog", "inventory_2"], todo: ["Todo", "radio_button_unchecked"], working: ["Working", "autorenew"],
+  review: ["Review", "rate_review"], needs_you: ["Needs you", "front_hand"], ready: ["Ready", "task_alt"], done: ["Done", "check_circle"],
+};
+const ROLES = { orchestrator: ["Orchestrator", "hub"], worker: ["Worker", "construction"], reviewer: ["Reviewer", "fact_check"] };
+const MODE_LABEL = { bypassPermissions: "Bypass", acceptEdits: "Accept edits", auto: "Auto", manual: "Ask", dontAsk: "Don't ask", plan: "Plan" };
+const STATUS_LABEL = { working: "Working", blocked: "Waiting for you", idle: "Idle", done: "Finished turn", unknown: "Unknown" };
+
+let S = null, openCard = null, dragging = false, lastBoard = "";
+let filter = (() => { try { return localStorage.getItem("hb.project") ?? ""; } catch { return ""; } })();
 const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const icon = (name, cls = "") => `<span class="icon ${cls}">${name}</span>`;
 
 async function api(method, path, body) {
   const res = await fetch(path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -212,124 +393,183 @@ async function api(method, path, body) {
   return data;
 }
 async function act(fn, ok) {
-  try { const r = await fn(); if (ok) toast(ok); await refresh(); return r; }
-  catch (e) { toast(e.message, true); }
+  try { const r = await fn(); if (ok) snack(ok); await refresh(); return r; }
+  catch (e) { snack(e.message, true); }
 }
-let toastTimer;
-function toast(msg, err = false) {
-  const t = $("#toast");
-  t.textContent = msg; t.className = "show" + (err ? " err" : "");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ""), err ? 6000 : 2500);
+let snackTimer;
+function snack(msg, err = false) {
+  const t = $("#snackbar");
+  t.textContent = msg; t.className = "snackbar show" + (err ? " err" : "");
+  clearTimeout(snackTimer); snackTimer = setTimeout(() => (t.className = "snackbar"), err ? 6000 : 2500);
 }
-const projectName = (id) => S.projects.find((p) => p.id === id)?.name ?? "?";
-const profileOptions = (sel, none = "default") =>
-  `<option value="">${none}</option>` + S.settings.profiles.map((p) => `<option ${p.name === sel ? "selected" : ""}>${esc(p.name)}</option>`).join("");
-const ago = (ms) => { const s = Math.round((Date.now() - ms) / 1000); return s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`; };
+const projectOf = (id) => S.projects.find((p) => p.id === id);
+const ago = (ms) => { const s = Math.round((Date.now() - ms) / 1000); return s < 60 ? "now" : s < 3600 ? `${Math.round(s / 60)}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`; };
 
+// ---- role config ---------------------------------------------------------
+const parseRole = (v) => (!v ? {} : typeof v === "object" ? v : v.startsWith("{") ? JSON.parse(v) : { profile: v });
+const clean = (cfg) => Object.fromEntries(Object.entries(cfg ?? {}).filter(([, v]) => v));
+/** settings → project → card, field by field (mirrors resolveRole on the server). */
+function effective(role, project, card) {
+  return { ...clean(S.settings.roles[role]), ...(project ? clean(parseRole(project[role])) : {}), ...(card ? clean(parseRole(card[role])) : {}) };
+}
+const summary = (cfg) => [cfg.profile, cfg.model, cfg.effort, cfg.mode && MODE_LABEL[cfg.mode]].filter(Boolean).join(" · ");
+
+/**
+ * Profile, model, effort and mode for one role. With `inherit` (the config this
+ * level falls back to) every field offers "Default (…)", and empty means inherit.
+ */
+function roleEditor(role, value, { inherit = null, disabled = false, note = "", profiles = S.settings.profiles } = {}) {
+  const v = parseRole(value);
+  const fallback = (k) => {
+    if (!inherit) return k === "profile" ? "" : `<option value="">Profile default</option>`;
+    const shown = inherit[k] ? ` (${k === "mode" ? MODE_LABEL[inherit[k]] : inherit[k]})` : "";
+    return `<option value="">Default${esc(shown)}</option>`;
+  };
+  const opts = (k, list, label = (x) => x) => fallback(k) + list.map((x) => `<option value="${esc(x)}" ${v[k] === x ? "selected" : ""}>${esc(label(x))}</option>`).join("");
+  const dis = disabled ? "disabled" : "";
+  return `<div class="role" data-role="${role}">
+    <div class="role-head">${icon(ROLES[role][1])}<span class="title-s">${ROLES[role][0]}</span>${note ? `<span class="body-s">${esc(note)}</span>` : ""}</div>
+    <div class="grid c4">
+      <label class="field dense"><span>Profile</span><select data-k="profile" ${dis}>${opts("profile", profiles.map((p) => p.name))}</select></label>
+      <label class="field dense"><span>Model</span><input data-k="model" list="models" value="${esc(v.model ?? "")}" placeholder="${esc(inherit?.model ?? "profile default")}" ${dis} autocomplete="off" spellcheck="false"></label>
+      <label class="field dense"><span>Effort</span><select data-k="effort" ${dis}>${opts("effort", S.efforts)}</select></label>
+      <label class="field dense"><span>Mode</span><select data-k="mode" ${dis}>${opts("mode", S.modes, (x) => MODE_LABEL[x])}</select></label>
+    </div></div>`;
+}
+const readRole = (el) => Object.fromEntries($$("[data-k]", el).map((i) => [i.dataset.k, i.value.trim()]).filter(([, v]) => v));
+
+// ---- render --------------------------------------------------------------
 async function refresh() {
   S = await api("GET", "/api/state");
   renderFilter(); renderOrch();
   if (!dragging) renderBoard();
-  if (openCard && !$("#drawerBody").contains(document.activeElement)) renderDrawer();
+  if (openCard && !$("#sheet").contains(document.activeElement)) renderSheet();
 }
 
 function renderFilter() {
-  const sel = $("#projectFilter");
   if (filter && !S.projects.some((p) => String(p.id) === filter)) filter = "";
-  sel.innerHTML = `<option value="">All projects</option>` + S.projects.map((p) => `<option value="${p.id}" ${String(p.id) === filter ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+  const html = `<option value="">All projects</option>` + S.projects.map((p) => `<option value="${p.id}" ${String(p.id) === filter ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+  if ($("#projectFilter").dataset.html !== html) { $("#projectFilter").innerHTML = html; $("#projectFilter").dataset.html = html; }
+}
+
+function renderOrch() {
+  const p = S.projects.find((p) => String(p.id) === filter);
+  $("#orch").hidden = !p;
+  if (!p) return;
+  const running = Boolean(p.orch_status);
+  $("#orchStart").innerHTML = running ? `${icon("open_in_new")}Open in herdr` : `${icon("play_arrow")}Start`;
+  $("#orchWho").textContent = `${running ? STATUS_LABEL[p.orch_status] ?? p.orch_status : "Not running"} · ${summary(effective("orchestrator", p))}`;
+  $("#orchSend").disabled = !running;
 }
 
 function renderBoard() {
   const cards = S.cards.filter((c) => !filter || String(c.project_id) === filter);
-  const recentDone = Date.now() - 3 * 86400_000;
-  $("#board").innerHTML = S.lanes.map((lane) => {
-    const list = cards.filter((c) => c.lane === lane && (lane !== "done" || c.updated_at > recentDone));
-    return `<section class="lane" data-lane="${lane}"><h2><span>${LABEL[lane]}</span><span>${list.length}</span></h2>${list.map(cardHtml).join("")}</section>`;
+  const recent = Date.now() - 3 * 86400_000;
+  const html = S.lanes.map((lane) => {
+    const list = cards.filter((c) => c.lane === lane && (lane !== "done" || c.updated_at > recent));
+    const alert = lane === "needs_you" && list.length;
+    return `<section class="lane ${alert ? "alert" : ""}" data-lane="${lane}">
+      <div class="lane-head">${icon(LANES[lane][1])}<span class="title-s">${LANES[lane][0]}</span><span class="badge ${alert ? "err" : ""}">${list.length}</span></div>
+      ${list.map(cardHtml).join("") || `<div class="empty">${lane === "todo" ? "Drop a card here to start it" : "Nothing here"}</div>`}
+    </section>`;
   }).join("");
+  if (html !== lastBoard) { $("#board").innerHTML = html; lastBoard = html; }
 }
 
 function cardHtml(c) {
-  const meta = [
-    !filter && `<span>${esc(projectName(c.project_id))}</span>`,
-    `<span>#${c.id}</span>`,
-    c.review ? (c.round ? `<span class="pill">review r${c.round}</span>` : `<span class="pill">review</span>`) : `<span class="pill">no review</span>`,
-    !c.worktree && `<span class="pill">main checkout</span>`,
-    c.automation_id && `<span class="pill">auto</span>`,
-    `<span>${ago(c.updated_at)}</span>`,
+  const p = projectOf(c.project_id);
+  const live = ["working", "review"].includes(c.lane) || (c.lane === "needs_you" && c.resume_lane);
+  const who = c.lane === "review" || c.resume_lane === "review" ? "reviewer" : "worker";
+  const status = live && c.agent_status
+    ? `<div class="status"><span class="dot ${c.agent_status}"></span><span>${STATUS_LABEL[c.agent_status] ?? c.agent_status} · ${esc(summary(effective(who, p, c)))}</span></div>`
+    : c.lane === "todo" || c.lane === "backlog" ? `<div class="status"><span class="dot"></span><span>${esc(summary(effective("worker", p, c)))}</span></div>` : "";
+  const chips = [
+    `<span class="chip">#${c.id}</span>`,
+    !filter && p && `<span class="chip">${icon("folder")}${esc(p.name)}</span>`,
+    c.review ? `<span class="chip tonal">${icon("fact_check")}${c.round ? `round ${c.round}` : "review"}</span>` : "",
+    !c.worktree && `<span class="chip">${icon("home")}main</span>`,
+    c.automation_id && `<span class="chip tertiary">${icon("schedule")}auto</span>`,
+    `<span class="chip" style="border:0">${ago(c.updated_at)}</span>`,
   ].filter(Boolean).join("");
-  return `<div class="card" draggable="true" data-id="${c.id}"><div class="t">${esc(c.title)}</div><div class="meta">${meta}</div>${c.lane === "needs_you" && c.attention ? `<div class="why">${esc(c.attention)}</div>` : ""}</div>`;
+  return `<article class="card" draggable="true" tabindex="0" data-id="${c.id}" aria-label="${esc(c.title)}">
+    <div class="t">${esc(c.title)}</div>${status}
+    ${c.lane === "needs_you" && c.attention ? `<div class="why">${esc(c.attention)}</div>` : ""}
+    <div class="chips">${chips}</div></article>`;
 }
 
-function renderOrch() {
-  const bar = $("#orch");
-  const p = S.projects.find((p) => String(p.id) === filter);
-  bar.hidden = !p;
-  if (!p) return;
-  $("#orchStart").textContent = p.orch_pane ? "Open orchestrator" : "Start orchestrator";
-  $("#orchWho").textContent = `profile: ${p.orchestrator || S.settings.roles.orchestrator}`;
-}
-
-// ---- drawer -------------------------------------------------------------
-async function renderDrawer() {
+// ---- side sheet ----------------------------------------------------------
+async function renderSheet() {
   let c;
-  try { c = await api("GET", `/api/cards/${openCard}`); } catch { closeDrawer(); return; }
+  try { c = await api("GET", `/api/cards/${openCard}`); } catch { closeSheet(); return; }
+  const full = S.cards.find((x) => x.id === c.id) ?? c;
+  const p = projectOf(c.project_id);
   const started = Boolean(c.workspace_id);
   const live = ["working", "review"].includes(c.lane) || (c.lane === "needs_you" && c.resume_lane);
-  $("#drawerBody").innerHTML = `
-    <h3>${esc(c.title)}</h3>
-    <div class="meta hint">#${c.id} · ${esc(projectName(c.project_id))} · ${LABEL[c.lane]}${c.round ? ` · review round ${c.round}` : ""}</div>
-    ${c.attention ? `<section><div class="card why" style="margin:0;max-height:none">${esc(c.attention)}</div></section>` : ""}
-    <section class="actions">
-      ${started ? `<button id="dFocus">Open in herdr</button>` : ""}
-      ${c.lane === "backlog" ? `<button data-move="todo" class="primary">Start (to Todo)</button>` : ""}
-      ${c.lane === "todo" && !started ? `<button data-move="backlog">Park in backlog</button>` : ""}
-      ${c.lane !== "done" ? `<button data-move="done">${started ? (c.worktree ? "Finish (remove worktree)" : "Finish (close tab)") : "Mark done"}</button>` : ""}
-      ${!started ? `<button id="dDelete" class="danger">Delete</button>` : ""}
-    </section>
-    <section class="row">
-      <label class="check"><input type="checkbox" id="dReview" ${c.review ? "checked" : ""} ${["ready", "done"].includes(c.lane) ? "disabled" : ""}> Agent review</label>
-      <label>Worker <select id="dWorker" ${started ? "disabled" : ""}>${profileOptions(c.worker)}</select></label>
-      <label>Reviewer <select id="dReviewer">${profileOptions(c.reviewer)}</select></label>
-    </section>
-    ${c.branch ? `<section class="hint mono">${esc(c.branch)}<br>${esc(c.cwd)}</section>` : c.cwd ? `<section class="hint mono">${esc(c.cwd)}</section>` : ""}
-    ${c.summary ? `<section><b>Worker summary</b><div class="brief">${esc(c.summary)}</div></section>` : ""}
-    <section><b>Brief</b><div class="brief">${esc(c.brief || "(empty: the title is the task)")}</div></section>`;
+  const closed = ["ready", "done"].includes(c.lane);
+  $("#sheetHead").innerHTML = `
+    <div class="chips"><span class="chip ${c.lane === "needs_you" ? "err" : c.lane === "ready" ? "ok" : "tonal"}">${icon(LANES[c.lane][1])}${LANES[c.lane][0]}</span>
+      ${full.agent_status && live ? `<span class="chip"><span class="dot ${full.agent_status}"></span>${STATUS_LABEL[full.agent_status]}</span>` : ""}
+      <span class="chip">#${c.id}</span><span class="chip">${icon("folder")}${esc(p?.name)}</span></div>
+    <div class="title-l">${esc(c.title)}</div>`;
+  $("#sheetBody").innerHTML = `
+    ${c.attention ? `<div class="section"><div class="why" style="-webkit-line-clamp:unset">${esc(c.attention)}</div></div>` : ""}
+    <div class="section"><div class="actions">
+      ${started ? `<button class="btn tonal" id="sFocus">${icon("open_in_new")}Open in herdr</button>` : ""}
+      ${c.lane === "backlog" ? `<button class="btn filled" data-move="todo">${icon("play_arrow")}Start</button>` : ""}
+      ${c.lane === "todo" && !started ? `<button class="btn outlined" data-move="backlog">${icon("inventory_2")}Park</button>` : ""}
+      ${c.lane !== "done" ? `<button class="btn ${c.lane === "ready" ? "filled" : "outlined"}" data-move="done">${icon("done_all")}${started ? (c.worktree ? "Finish & remove worktree" : "Finish & close tab") : "Mark done"}</button>` : ""}
+      ${!started ? `<button class="btn text danger" id="sDelete">${icon("delete")}Delete</button>` : ""}
+    </div></div>
+    <div class="section">
+      <h4>Agents</h4>
+      <label class="switch"><input type="checkbox" id="sReview" ${c.review ? "checked" : ""} ${closed ? "disabled" : ""}> Agent review before Ready</label>
+      ${roleEditor("worker", c.worker, { inherit: effective("worker", p), disabled: started, note: started ? "already started" : "" })}
+      ${c.review ? roleEditor("reviewer", c.reviewer, { inherit: effective("reviewer", p), disabled: closed }) : ""}
+    </div>
+    ${c.branch || c.cwd ? `<div class="section"><h4>Where</h4><div class="mono muted">${c.branch ? `${esc(c.branch)}<br>` : ""}${esc(c.cwd)}</div></div>` : ""}
+    ${c.summary ? `<div class="section"><h4>Worker summary</h4><div class="prose">${esc(c.summary)}</div></div>` : ""}
+    <div class="section"><h4>Brief</h4><div class="prose">${esc(c.brief || "(empty, so the title is the task)")}</div></div>`;
   $("#replyBox").hidden = !live;
-  $("#drawerEvents").innerHTML = c.events.slice().reverse().map((e) => `<li><time>${new Date(e.at).toLocaleString()}</time>${esc(e.text)}</li>`).join("");
+  $("#sheetEvents").innerHTML = c.events.slice().reverse().map((e) => `<li><time>${new Date(e.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time>${esc(e.text)}</li>`).join("");
 
-  $("#dFocus")?.addEventListener("click", () => act(() => api("POST", `/api/cards/${c.id}/focus`), "Focused in herdr"));
-  $("#dDelete")?.addEventListener("click", () => act(async () => { await api("DELETE", `/api/cards/${c.id}`); closeDrawer(); }, "Deleted"));
-  for (const b of document.querySelectorAll("#drawerBody [data-move]")) b.addEventListener("click", () => act(() => api("POST", `/api/cards/${c.id}/move`, { lane: b.dataset.move })));
-  $("#dReview").addEventListener("change", (e) => act(() => api("PATCH", `/api/cards/${c.id}`, { review: e.target.checked ? 1 : 0 })));
-  $("#dWorker").addEventListener("change", (e) => act(() => api("PATCH", `/api/cards/${c.id}`, { worker: e.target.value || null })));
-  $("#dReviewer").addEventListener("change", (e) => act(() => api("PATCH", `/api/cards/${c.id}`, { reviewer: e.target.value || null })));
+  $("#sFocus")?.addEventListener("click", () => act(() => api("POST", `/api/cards/${c.id}/focus`), "Focused in herdr"));
+  $("#sDelete")?.addEventListener("click", () => act(async () => { await api("DELETE", `/api/cards/${c.id}`); closeSheet(); }, "Card deleted"));
+  $$("#sheetBody [data-move]").forEach((b) => b.addEventListener("click", () => act(() => api("POST", `/api/cards/${c.id}/move`, { lane: b.dataset.move }))));
+  $("#sReview").addEventListener("change", (e) => act(async () => { await api("PATCH", `/api/cards/${c.id}`, { review: e.target.checked ? 1 : 0 }); document.activeElement.blur(); }));
+  $$("#sheetBody .role").forEach((el) => el.addEventListener("change", () =>
+    act(() => api("PATCH", `/api/cards/${c.id}`, { [el.dataset.role]: readRole(el) }), `${ROLES[el.dataset.role][0]} updated`)));
 }
-function openDrawer(id) { openCard = id; $("#drawer").classList.add("open"); $("#replyText").value = ""; renderDrawer(); }
-function closeDrawer() { openCard = null; $("#drawer").classList.remove("open"); }
-$("#drawerClose").onclick = closeDrawer;
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) closeDrawer(); });
-$("#replySend").onclick = () => {
+function openSheet(id) { openCard = id; $("#replyText").value = ""; $("#sheet").classList.add("open"); $("#scrim").classList.add("open"); renderSheet(); }
+function closeSheet() { openCard = null; $("#sheet").classList.remove("open"); $("#scrim").classList.remove("open"); }
+$("#sheetClose").onclick = closeSheet;
+$("#scrim").onclick = closeSheet;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("dialog[open]")) closeSheet(); });
+const sendReply = () => {
   const text = $("#replyText").value.trim();
   if (text) act(async () => { await api("POST", `/api/cards/${openCard}/reply`, { text }); $("#replyText").value = ""; }, "Sent to the agent");
 };
+$("#replySend").onclick = sendReply;
+$("#replyText").addEventListener("keydown", (e) => { if (e.key === "Enter") sendReply(); });
 
-// ---- board interactions -------------------------------------------------
+// ---- board interactions --------------------------------------------------
 const board = $("#board");
-board.addEventListener("click", (e) => { const el = e.target.closest(".card"); if (el) openDrawer(Number(el.dataset.id)); });
-board.addEventListener("dragstart", (e) => { const el = e.target.closest(".card"); if (el) { dragging = true; e.dataTransfer.setData("text/plain", el.dataset.id); } });
-board.addEventListener("dragend", () => { dragging = false; });
-board.addEventListener("dragover", (e) => { const lane = e.target.closest(".lane"); if (lane) { e.preventDefault(); lane.classList.add("over"); } });
-board.addEventListener("dragleave", (e) => e.target.closest(".lane")?.classList.remove("over"));
+board.addEventListener("click", (e) => { const el = e.target.closest(".card"); if (el) openSheet(Number(el.dataset.id)); });
+board.addEventListener("keydown", (e) => { const el = e.target.closest(".card"); if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openSheet(Number(el.dataset.id)); } });
+board.addEventListener("dragstart", (e) => { const el = e.target.closest(".card"); if (!el) return; dragging = true; el.classList.add("dragging"); e.dataTransfer.setData("text/plain", el.dataset.id); });
+board.addEventListener("dragend", (e) => { dragging = false; e.target.closest?.(".card")?.classList.remove("dragging"); $$(".lane.over").forEach((l) => l.classList.remove("over")); });
+board.addEventListener("dragover", (e) => { const lane = e.target.closest(".lane"); if (!lane) return; e.preventDefault(); $$(".lane.over").forEach((l) => l !== lane && l.classList.remove("over")); lane.classList.add("over"); });
 board.addEventListener("drop", (e) => {
   const lane = e.target.closest(".lane");
   if (!lane) return;
-  e.preventDefault(); lane.classList.remove("over");
+  e.preventDefault(); lane.classList.remove("over"); dragging = false;
   const id = e.dataTransfer.getData("text/plain");
   if (id) act(() => api("POST", `/api/cards/${id}/move`, { lane: lane.dataset.lane }));
 });
-$("#projectFilter").onchange = (e) => { filter = e.target.value; try { localStorage.setItem("hb.project", filter); } catch {} refresh(); };
+$("#projectFilter").onchange = (e) => { filter = e.target.value; try { localStorage.setItem("hb.project", filter); } catch {} lastBoard = ""; refresh(); };
+addEventListener("scroll", () => $("#appbar").classList.toggle("scrolled", scrollY > 4), { passive: true });
+document.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) e.target.closest("dialog").close(); });
 
-// ---- orchestrator -------------------------------------------------------
+// ---- orchestrator --------------------------------------------------------
 $("#orchStart").onclick = () => act(() => api("POST", `/api/projects/${filter}/orchestrator`), "Orchestrator is up in herdr");
 const sendOrch = () => {
   const text = $("#orchText").value.trim();
@@ -338,77 +578,94 @@ const sendOrch = () => {
 $("#orchSend").onclick = sendOrch;
 $("#orchText").addEventListener("keydown", (e) => { if (e.key === "Enter") sendOrch(); });
 
-// ---- new card -----------------------------------------------------------
+// ---- new card ------------------------------------------------------------
 $("#newCardBtn").onclick = () => {
-  if (!S.projects.length) { toast("Add a project first", true); $("#projectsBtn").click(); return; }
+  if (!S.projects.length) { snack("Add a project first", true); openProjects(); return; }
   const f = $("#cardForm");
   f.reset();
   f.project_id.innerHTML = S.projects.map((p) => `<option value="${p.id}" ${String(p.id) === filter ? "selected" : ""}>${esc(p.name)}</option>`).join("");
-  f.worker.innerHTML = profileOptions(null); f.reviewer.innerHTML = profileOptions(null);
-  const syncReview = () => { f.review.checked = Boolean(S.projects.find((p) => String(p.id) === f.project_id.value)?.review); };
-  f.project_id.onchange = syncReview; syncReview();
+  const sync = () => {
+    const p = projectOf(Number(f.project_id.value));
+    f.review.checked = Boolean(p?.review);
+    $("#cardRoles").innerHTML = roleEditor("worker", null, { inherit: effective("worker", p) }) + roleEditor("reviewer", null, { inherit: effective("reviewer", p) });
+  };
+  f.project_id.onchange = sync; sync();
   $("#cardDlg").showModal();
+  f.title.focus();
 };
 $("#cardDlg").addEventListener("close", () => {
   if ($("#cardDlg").returnValue !== "ok") return;
   const f = $("#cardForm");
   act(() => api("POST", "/api/cards", {
     project_id: Number(f.project_id.value), title: f.title.value, brief: f.brief.value, lane: f.lane.value,
-    review: f.review.checked, worktree: f.worktree.checked, worker: f.worker.value, reviewer: f.reviewer.value,
+    review: f.review.checked, worktree: f.worktree.checked,
+    worker: readRole($('#cardRoles [data-role="worker"]')), reviewer: readRole($('#cardRoles [data-role="reviewer"]')),
   }), "Card created");
 });
 
-// ---- projects -----------------------------------------------------------
+// ---- projects ------------------------------------------------------------
 function renderProjects() {
-  $("#projectRows").innerHTML = S.projects.map((p) => `<tr data-id="${p.id}">
-    <td title="${esc(p.path)}">${esc(p.name)}</td>
-    <td><input data-f="base" value="${esc(p.base)}" style="width:90px"></td>
-    <td><input type="checkbox" data-f="review" ${p.review ? "checked" : ""} aria-label="Review by default"></td>
-    ${["orchestrator", "worker", "reviewer"].map((r) => `<td><select data-f="${r}">${profileOptions(p[r])}</select></td>`).join("")}
-    <td><button class="danger" data-del>Remove</button></td></tr>`).join("") || `<tr><td colspan="7" class="hint">No projects yet.</td></tr>`;
+  $("#projectList").innerHTML = S.projects.map((p) => `<div class="list-item" data-id="${p.id}">
+    <div class="row">
+      ${icon("folder", "muted")}
+      <div class="grow"><div class="title-s">${esc(p.name)}</div><div class="body-s mono" title="${esc(p.path)}">${esc(p.path)}</div></div>
+      <label class="field dense" style="width:120px"><span>Base</span><input data-f="base" value="${esc(p.base)}"></label>
+      <label class="switch" title="Agent review by default"><input type="checkbox" data-f="review" ${p.review ? "checked" : ""}> Review</label>
+      <button class="icon-btn" data-del title="Remove project" aria-label="Remove ${esc(p.name)}"><span class="icon">delete</span></button>
+    </div>
+    <details><summary><span class="icon">chevron_right</span>Agent overrides</summary><div class="stack">
+      ${Object.keys(ROLES).map((r) => roleEditor(r, p[r], { inherit: clean(S.settings.roles[r]) })).join("")}
+    </div></details></div>`).join("") || `<p class="hint">No projects yet.</p>`;
 }
-$("#projectsBtn").onclick = () => { renderProjects(); $("#projectsDlg").showModal(); };
-$("#projectRows").addEventListener("change", (e) => {
-  const id = e.target.closest("tr").dataset.id, f = e.target.dataset.f;
-  const value = e.target.type === "checkbox" ? (e.target.checked ? 1 : 0) : e.target.value || null;
-  act(() => api("PATCH", `/api/projects/${id}`, { [f]: value }), "Saved");
+function openProjects() { renderProjects(); $("#projectsDlg").showModal(); }
+$("#projectsBtn").onclick = openProjects;
+$("#projectList").addEventListener("change", (e) => {
+  const id = e.target.closest(".list-item").dataset.id;
+  const role = e.target.closest(".role");
+  const patch = role ? { [role.dataset.role]: readRole(role) }
+    : { [e.target.dataset.f]: e.target.type === "checkbox" ? (e.target.checked ? 1 : 0) : e.target.value };
+  act(() => api("PATCH", `/api/projects/${id}`, patch), "Saved");
 });
-$("#projectRows").addEventListener("click", (e) => {
-  if (!e.target.matches("[data-del]")) return;
-  const id = e.target.closest("tr").dataset.id;
-  act(async () => { await api("DELETE", `/api/projects/${id}`); renderProjects(); }, "Project removed");
+$("#projectList").addEventListener("click", (e) => {
+  if (!e.target.closest("[data-del]")) return;
+  const id = e.target.closest(".list-item").dataset.id;
+  act(async () => { await api("DELETE", `/api/projects/${id}`); await refresh(); renderProjects(); }, "Project removed");
 });
 $("#projectForm").onsubmit = (e) => {
   e.preventDefault();
   act(async () => { await api("POST", "/api/projects", { path: e.target.path.value }); e.target.reset(); await refresh(); renderProjects(); }, "Project added");
 };
 
-// ---- automations --------------------------------------------------------
+// ---- automations ---------------------------------------------------------
 function renderAutos() {
-  $("#autoRows").innerHTML = S.automations.map((a) => `<tr data-id="${a.id}">
-    <td title="${esc(a.title)}">${esc(a.name)}</td>
-    <td><input data-f="trigger" value="${esc(a.trigger)}"></td>
-    <td>${esc(projectName(a.project_id))}</td>
-    <td class="hint">${a.enabled ? new Date(a.next_due).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "-"}</td>
-    <td><input type="checkbox" data-f="enabled" ${a.enabled ? "checked" : ""} aria-label="Enabled"></td>
-    <td style="white-space:nowrap"><button data-run>Run now</button> <button class="danger" data-del>Delete</button></td></tr>`).join("") || `<tr><td colspan="6" class="hint">No automations yet.</td></tr>`;
+  $("#autoList").innerHTML = S.automations.map((a) => `<div class="list-item" data-id="${a.id}">
+    <div class="row">
+      ${icon("schedule", "muted")}
+      <div class="grow"><div class="title-s">${esc(a.name)}</div><div class="body-s">${esc(projectOf(a.project_id)?.name)} · ${esc(a.title)} · ${a.enabled ? `next ${new Date(a.next_due).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}` : "paused"}</div></div>
+      <label class="field dense" style="width:170px"><span>Trigger</span><input data-f="trigger" value="${esc(a.trigger)}"></label>
+      <label class="switch" title="Enabled"><input type="checkbox" data-f="enabled" ${a.enabled ? "checked" : ""} aria-label="Enabled"></label>
+      <button class="btn tonal sm" data-run>${icon("play_arrow")}Run</button>
+      <button class="icon-btn" data-del title="Delete" aria-label="Delete ${esc(a.name)}"><span class="icon">delete</span></button>
+    </div></div>`).join("") || `<p class="hint">No automations yet.</p>`;
 }
 $("#automationsBtn").onclick = () => {
-  if (!S.projects.length) { toast("Add a project first", true); return; }
+  if (!S.projects.length) { snack("Add a project first", true); return; }
   const f = $("#autoForm");
-  f.project_id.innerHTML = S.projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
-  f.worker.innerHTML = profileOptions(null); f.reviewer.innerHTML = profileOptions(null);
+  f.project_id.innerHTML = S.projects.map((p) => `<option value="${p.id}" ${String(p.id) === filter ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+  const sync = () => { $("#autoRoles").innerHTML = roleEditor("worker", null, { inherit: effective("worker", projectOf(Number(f.project_id.value))) }); };
+  f.project_id.onchange = sync; sync();
+  $("#autoAdd").open = !S.automations.length;
   renderAutos(); $("#autoDlg").showModal();
 };
-$("#autoRows").addEventListener("change", (e) => {
-  const id = e.target.closest("tr").dataset.id, f = e.target.dataset.f;
+$("#autoList").addEventListener("change", (e) => {
+  const id = e.target.closest(".list-item").dataset.id, f = e.target.dataset.f;
   const value = e.target.type === "checkbox" ? (e.target.checked ? 1 : 0) : e.target.value;
   act(async () => { await api("PATCH", `/api/automations/${id}`, { [f]: value }); renderAutos(); }, "Saved");
 });
-$("#autoRows").addEventListener("click", (e) => {
-  const id = e.target.closest("tr")?.dataset.id;
-  if (e.target.matches("[data-run]")) act(() => api("POST", `/api/automations/${id}/run`), "Card created");
-  if (e.target.matches("[data-del]")) act(async () => { await api("DELETE", `/api/automations/${id}`); renderAutos(); }, "Deleted");
+$("#autoList").addEventListener("click", (e) => {
+  const id = e.target.closest(".list-item")?.dataset.id;
+  if (e.target.closest("[data-run]")) act(() => api("POST", `/api/automations/${id}/run`), "Card created");
+  if (e.target.closest("[data-del]")) act(async () => { await api("DELETE", `/api/automations/${id}`); await refresh(); renderAutos(); }, "Automation deleted");
 });
 $("#autoForm").onsubmit = (e) => {
   e.preventDefault();
@@ -416,44 +673,46 @@ $("#autoForm").onsubmit = (e) => {
   act(async () => {
     await api("POST", "/api/automations", {
       name: f.name.value, trigger: f.trigger.value, project_id: Number(f.project_id.value), title: f.title.value, brief: f.brief.value,
-      review: f.review.checked, worktree: f.worktree.checked, worker: f.worker.value, reviewer: f.reviewer.value,
+      review: f.review.checked, worktree: f.worktree.checked, worker: readRole($('#autoRoles [data-role="worker"]')),
     });
-    f.reset(); await refresh(); renderAutos();
+    f.reset(); $("#autoAdd").open = false; await refresh(); renderAutos();
   }, "Automation added");
 };
 
-// ---- settings -----------------------------------------------------------
+// ---- settings ------------------------------------------------------------
 function profileRow(p = { name: "", command: "" }) {
-  return `<tr><td><input data-k="name" value="${esc(p.name)}" required></td><td><input data-k="command" class="mono" value="${esc(p.command)}" required></td><td><button type="button" class="danger" data-del>✕</button></td></tr>`;
+  return `<div class="actions profile" style="flex-wrap:nowrap;align-items:center">
+    <label class="field dense" style="width:120px;flex:none"><span>Name</span><input data-p="name" value="${esc(p.name)}" required></label>
+    <label class="field dense" style="flex:1"><span>Command</span><input data-p="command" class="mono" value="${esc(p.command)}" required spellcheck="false"></label>
+    <button type="button" class="icon-btn" data-del title="Remove profile" aria-label="Remove profile"><span class="icon">delete</span></button></div>`;
 }
-function fillRoleSelects() {
-  const f = $("#settingsForm");
-  const names = [...document.querySelectorAll('#profileRows [data-k="name"]')].map((i) => i.value).filter(Boolean);
-  for (const r of ["orchestrator", "worker", "reviewer"]) {
-    const cur = f[r].value || S.settings.roles[r];
-    f[r].innerHTML = names.map((n) => `<option ${n === cur ? "selected" : ""}>${esc(n)}</option>`).join("");
-  }
+/** Redraws the default-agent editors against the profile names currently typed. */
+function renderSettingsRoles() {
+  const profiles = $$("#profileRows .profile").map((row) => ({ name: $('[data-p="name"]', row).value.trim() })).filter((p) => p.name);
+  const current = Object.fromEntries(Object.keys(ROLES).map((r) => {
+    const el = $(`#settingsRoles [data-role="${r}"]`);
+    return [r, el ? readRole(el) : S.settings.roles[r]];
+  }));
+  $("#settingsRoles").innerHTML = Object.keys(ROLES).map((r) => roleEditor(r, current[r], { profiles })).join("");
 }
 $("#settingsBtn").onclick = () => {
   const f = $("#settingsForm");
   $("#profileRows").innerHTML = S.settings.profiles.map(profileRow).join("");
-  for (const r of ["orchestrator", "worker", "reviewer"]) f[r].innerHTML = "";
-  fillRoleSelects();
+  $("#settingsRoles").innerHTML = "";
+  renderSettingsRoles();
   f.maxWorkers.value = S.settings.maxWorkers; f.maxRounds.value = S.settings.maxRounds;
   $("#settingsDlg").showModal();
 };
-$("#addProfile").onclick = () => $("#profileRows").insertAdjacentHTML("beforeend", profileRow());
-$("#profileRows").addEventListener("click", (e) => { if (e.target.matches("[data-del]")) { e.target.closest("tr").remove(); fillRoleSelects(); } });
-$("#profileRows").addEventListener("input", fillRoleSelects);
+$("#addProfile").onclick = () => { $("#profileRows").insertAdjacentHTML("beforeend", profileRow()); $("#profileRows .profile:last-child input").focus(); };
+$("#profileRows").addEventListener("click", (e) => { if (e.target.closest("[data-del]")) { e.target.closest(".profile").remove(); renderSettingsRoles(); } });
+$("#profileRows").addEventListener("change", renderSettingsRoles);
 $("#settingsForm").onsubmit = (e) => {
   e.preventDefault();
   const f = e.target;
-  const profiles = [...document.querySelectorAll("#profileRows tr")].map((tr) => ({ name: $('[data-k="name"]', tr).value.trim(), command: $('[data-k="command"]', tr).value.trim() }));
+  const profiles = $$("#profileRows .profile").map((row) => ({ name: $('[data-p="name"]', row).value.trim(), command: $('[data-p="command"]', row).value.trim() }));
+  const roles = Object.fromEntries(Object.keys(ROLES).map((r) => [r, readRole($(`#settingsRoles [data-role="${r}"]`))]));
   act(async () => {
-    await api("PUT", "/api/settings", {
-      profiles, roles: { orchestrator: f.orchestrator.value, worker: f.worker.value, reviewer: f.reviewer.value },
-      maxWorkers: Number(f.maxWorkers.value), maxRounds: Number(f.maxRounds.value),
-    });
+    await api("PUT", "/api/settings", { profiles, roles, maxWorkers: Number(f.maxWorkers.value), maxRounds: Number(f.maxRounds.value) });
     $("#settingsDlg").close();
   }, "Settings saved");
 };

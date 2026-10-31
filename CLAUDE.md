@@ -29,6 +29,9 @@
 - Error handling pattern: throw `Error` with a user-readable message; the server turns it into `400 {error}`, and the CLI and UI show it as is.
 - Testing pattern and framework: `bun:test`; drive `Pipeline` through `FakeHerdr`, assert on store state.
 
+- Access control: the server binds 0.0.0.0. `src/auth.ts` lets only loopback requests with a local `Host` header through; everything else needs the token from `~/.herdrboard/token` (cookie, `x-hb-token`, or `?token=` once). Writes must be `application/json`. Keep every route behind `guarded()` in `server.ts`.
+- Role config (profile/model/effort/mode) is JSON in the `orchestrator`/`worker`/`reviewer` columns; `resolveRole` merges card → project → settings per field, `launchCommand` builds the command. The UI mirrors the merge in `effective()`.
+
 ### Forbidden
 - Talking to herdr through anything but `src/herdr.ts` (the `Herdr` interface keeps the pipeline testable).
 - Closing herdr workspaces, tabs, or panes that herdrboard did not create, or running `herdr server stop`.
@@ -40,4 +43,6 @@
 - herdr reports a freshly typed `cc2` as `idle` before Claude Code has drawn its UI. Wait for two settled polls, and handle the folder-trust prompt (`blocked`) first.
 - After `hb ask`, the agent is still `working` while it finishes that turn. A needs_you card may only return to its lane after the agent has settled once (`worked` flag).
 - `herdr worktree remove` also closes the workspace and its agents. `herdr worktree create` creates a primary workspace for the repo root if none exists.
+- The cc* functions in ~/.zshrc use `--permission-mode bypassPermissions` (not `--dangerously-skip-permissions`) so a later `--permission-mode` from the board wins. Backup: `~/.zshrc.bak-herdrboard-20261031`.
+- Non-bypass modes prompt to read the brief outside the worktree, so `launch()` adds `--add-dir <brief dir>`.
 - `HB_CARD=1 cc2` passes env through zsh functions, and the cc functions' `env -u …` keeps it.

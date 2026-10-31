@@ -2,13 +2,15 @@ import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename } from "node:path";
 import { LANES, Store, type Lane, type Settings } from "./db.ts";
+import { gate, loadToken } from "./auth.ts";
 import { cliHerdr } from "./herdr.ts";
 import { Pipeline } from "./pipeline.ts";
-import { defaultSettings } from "./profiles.ts";
+import { defaultSettings, EFFORTS, MODES, storeRole, validateRole } from "./profiles.ts";
 import { nextDue, parseTrigger } from "./scheduler.ts";
 
 export const HOME = process.env.HB_HOME ?? `${homedir()}/.herdrboard`;
 export const PORT = Number(process.env.HB_PORT ?? 7420);
+const HOST = process.env.HB_HOST ?? "0.0.0.0";
 const TICK_MS = 3000;
 
 const PROJECT_FIELDS = ["name", "base", "review", "orchestrator", "worker", "reviewer"];
@@ -27,18 +29,30 @@ function git(path: string, ...args: string[]): string | null {
 function validateSettings(s: Settings): Settings {
   if (!Array.isArray(s.profiles) || !s.profiles.length) throw new Error("at least one profile is required");
   for (const p of s.profiles) if (!p.name?.trim() || !p.command?.trim()) throw new Error("each profile needs a name and a command");
-  const names = s.profiles.map((p) => p.name);
+  const roles = {} as Settings["roles"];
   for (const role of ["orchestrator", "worker", "reviewer"] as const) {
-    if (!names.includes(s.roles?.[role])) throw new Error(`${role} profile '${s.roles?.[role]}' is not defined`);
+    const cfg = validateRole(s.roles?.[role] ?? {}, s.profiles);
+    if (!cfg.profile) throw new Error(`${role} needs a profile`);
+    roles[role] = cfg as Settings["roles"][typeof role];
   }
   if (!(s.maxWorkers >= 1) || !(s.maxRounds >= 0)) throw new Error("maxWorkers must be ≥ 1 and maxRounds ≥ 0");
-  return { profiles: s.profiles, roles: s.roles, maxWorkers: Number(s.maxWorkers), maxRounds: Number(s.maxRounds) };
+  return { profiles: s.profiles, roles, maxWorkers: Number(s.maxWorkers), maxRounds: Number(s.maxRounds) };
 }
+
+const ROLE_FIELDS = ["orchestrator", "worker", "reviewer"];
 
 export function serve(): void {
   mkdirSync(HOME, { recursive: true });
   const store = new Store(`${HOME}/herdrboard.db`, () => defaultSettings());
   const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}` });
+
+  /** Role override fields (name, config object or empty) → validated JSON column values. */
+  const roles = <T extends Record<string, any>>(patch: T): T => {
+    const profiles = store.settings().profiles;
+    const out: Record<string, any> = { ...patch };
+    for (const f of ROLE_FIELDS) if (f in out) out[f] = storeRole(out[f], profiles);
+    return out as T;
+  };
 
   const card = (id: string) => {
     const c = store.card(Number(id));
@@ -49,11 +63,14 @@ export function serve(): void {
   const api: Record<string, (req: Request, p: Record<string, string>, body: any) => unknown> = {
     "GET /api/state": () => {
       const now = Date.now();
+      const status = (pane: string | null) => (pane && pipe.statuses.get(pane)) || null;
       return {
         lanes: LANES,
+        efforts: EFFORTS,
+        modes: MODES,
         settings: store.settings(),
-        projects: store.projects(),
-        cards: store.cards(),
+        projects: store.projects().map((p) => ({ ...p, orch_status: status(p.orch_pane) })),
+        cards: store.cards().map((c) => ({ ...c, agent_status: status(pipe.activePane(c)) })),
         automations: store.automations().map((a) => ({
           ...a,
           next_due: nextDue(parseTrigger(a.trigger), Math.max(a.last_run_at, a.created_at), now),
@@ -74,7 +91,7 @@ export function serve(): void {
       const base = body.base || git(path, "symbolic-ref", "--short", "HEAD") || "main";
       return store.addProject({ name: body.name || basename(path), path, base, review: body.review ?? 1 });
     },
-    "PATCH /api/projects/:id": (_r, p, body) => store.updateProject(Number(p.id), pick(body, PROJECT_FIELDS)),
+    "PATCH /api/projects/:id": (_r, p, body) => store.updateProject(Number(p.id), roles(pick(body, PROJECT_FIELDS))),
     "DELETE /api/projects/:id": (_r, p) => store.deleteProject(Number(p.id)),
     "POST /api/projects/:id/orchestrator": (_r, p) => pipe.startOrchestrator(Number(p.id)),
     "POST /api/projects/:id/orchestrator/say": (_r, p, body) => pipe.sayToOrchestrator(Number(p.id), String(body.text)),
@@ -90,8 +107,7 @@ export function serve(): void {
         lane: body.lane === "backlog" ? "backlog" : "todo",
         review: body.review === undefined ? project.review : Number(Boolean(body.review)),
         worktree: body.worktree === undefined ? 1 : Number(Boolean(body.worktree)),
-        worker: body.worker || null,
-        reviewer: body.reviewer || null,
+        ...roles({ worker: body.worker ?? null, reviewer: body.reviewer ?? null }),
       });
       pipe.startQueued();
       return c;
@@ -99,7 +115,7 @@ export function serve(): void {
     "GET /api/cards/:id": (_r, p) => ({ ...card(p.id!), events: store.events(Number(p.id)) }),
     "PATCH /api/cards/:id": (_r, p, body) => {
       const c = card(p.id!);
-      const patch = pick(body, CARD_FIELDS);
+      const patch = roles(pick(body, CARD_FIELDS));
       if (c.workspace_id && ("worktree" in patch || "worker" in patch)) throw new Error("the worker already started");
       return store.updateCard(c.id, patch);
     },
@@ -132,13 +148,12 @@ export function serve(): void {
         brief: String(body.brief ?? ""),
         worktree: body.worktree === undefined ? 1 : Number(Boolean(body.worktree)),
         review: body.review === undefined ? project.review : Number(Boolean(body.review)),
-        worker: body.worker || null,
-        reviewer: body.reviewer || null,
+        ...roles({ worker: body.worker ?? null, reviewer: body.reviewer ?? null }),
       });
     },
     "PATCH /api/automations/:id": (_r, p, body) => {
       if (body.trigger !== undefined) parseTrigger(String(body.trigger));
-      return store.updateAutomation(Number(p.id), pick(body, AUTOMATION_FIELDS));
+      return store.updateAutomation(Number(p.id), roles(pick(body, AUTOMATION_FIELDS)));
     },
     "DELETE /api/automations/:id": (_r, p) => store.deleteAutomation(Number(p.id)),
     "POST /api/automations/:id/run": (_r, p) => {
@@ -151,24 +166,28 @@ export function serve(): void {
     },
   };
 
-  const routes: Record<string, Record<string, (req: Request & { params: Record<string, string> }) => Promise<Response>>> = {};
+  const token = loadToken(HOME);
+  type Handler = (req: Request & { params: Record<string, string> }, server: Bun.Server<unknown>) => Response | Promise<Response>;
+  const guarded = (h: Handler): Handler => (req, server) => gate(req, server.requestIP(req)?.address ?? "", token, PORT) ?? h(req, server);
+
+  const routes: Record<string, Record<string, Handler>> = {};
   for (const [key, handler] of Object.entries(api)) {
     const [method, path] = key.split(" ") as [string, string];
-    (routes[path] ??= {})[method] = async (req) => {
+    (routes[path] ??= {})[method] = guarded(async (req) => {
       try {
         const body = method === "GET" || method === "DELETE" ? {} : await req.json().catch(() => ({}));
         return Response.json((await handler(req, req.params, body)) ?? { ok: true });
       } catch (e) {
         return Response.json({ error: (e as Error).message }, { status: 400 });
       }
-    };
+    });
   }
 
   const page = Bun.file(new URL("../web/index.html", import.meta.url).pathname);
   Bun.serve({
-    hostname: "127.0.0.1",
+    hostname: HOST,
     port: PORT,
-    routes: { ...routes, "/": () => new Response(page, { headers: { "content-type": "text/html" } }) },
+    routes: { ...routes, "/": guarded(() => new Response(page, { headers: { "content-type": "text/html" } })) },
     fetch: () => Response.json({ error: "not found" }, { status: 404 }),
   });
 
@@ -176,5 +195,5 @@ export function serve(): void {
   const tick = () => pipe.tick().catch((e) => console.error(`tick: ${e.message}`));
   setInterval(tick, TICK_MS);
   tick();
-  console.log(`herdrboard on http://127.0.0.1:${PORT} (state in ${HOME})`);
+  console.log(`herdrboard on http://${HOST}:${PORT} (state in ${HOME}); other devices: \`hb url\``);
 }

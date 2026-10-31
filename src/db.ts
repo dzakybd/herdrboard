@@ -10,7 +10,7 @@ export interface Project {
   path: string;
   base: string;
   review: number; // default for new cards
-  orchestrator: string | null; // profile overrides; null = settings default
+  orchestrator: string | null; // RoleConfig JSON overrides; null = settings default
   worker: string | null;
   reviewer: string | null;
   orch_pane: string | null;
@@ -70,9 +70,16 @@ export interface Profile {
   command: string;
 }
 
+export interface RoleConfig {
+  profile?: string;
+  model?: string;
+  effort?: string;
+  mode?: string;
+}
+
 export interface Settings {
   profiles: Profile[];
-  roles: Record<Role, string>;
+  roles: Record<Role, RoleConfig & { profile: string }>;
   maxWorkers: number;
   maxRounds: number;
 }
@@ -142,7 +149,12 @@ export class Store {
 
   settings(): Settings {
     const row = this.db.query("SELECT value FROM settings WHERE key = 'settings'").get() as { value: string };
-    return JSON.parse(row.value);
+    const s = JSON.parse(row.value);
+    // Before model/effort/mode existed, a role was just a profile name.
+    for (const [role, cfg] of Object.entries(s.roles)) {
+      if (typeof cfg === "string") s.roles[role] = { profile: cfg, mode: "bypassPermissions" };
+    }
+    return s;
   }
 
   saveSettings(s: Settings): void {

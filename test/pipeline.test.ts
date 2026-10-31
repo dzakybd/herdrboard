@@ -79,7 +79,11 @@ beforeEach(() => {
       { name: "cc2", command: "cc2" },
       { name: "ccd", command: "ccd" },
     ],
-    roles: { orchestrator: "cc2", worker: "cc2", reviewer: "ccd" },
+    roles: {
+      orchestrator: { profile: "cc2", mode: "bypassPermissions" },
+      worker: { profile: "cc2", mode: "bypassPermissions" },
+      reviewer: { profile: "ccd", model: "sonnet", mode: "bypassPermissions" },
+    },
     maxWorkers: 2,
     maxRounds: 2,
   }));
@@ -104,7 +108,9 @@ describe("worker start", () => {
     expect(card.lane).toBe("working");
     expect(card.branch).toBe(`hb/${card.id}-add-hello`);
     expect(card.cwd).toBe(`/wt/hb/${card.id}-add-hello`);
-    expect(herdr.commands[0]!.command).toBe(`HB_CARD=${card.id} HB_ROLE=worker HB_URL=http://127.0.0.1:7420 cc2`);
+    expect(herdr.commands[0]!.command).toMatch(
+      new RegExp(`^HB_CARD=${card.id} HB_ROLE=worker HB_URL=http://127.0.0.1:7420 cc2 --permission-mode bypassPermissions --add-dir '.*/cards/${card.id}'$`),
+    );
     expect(herdr.names.get(`hb-${card.id}-worker`)).toBe(card.worker_pane!);
     const brief = herdr.prompts[0]!.text.match(/^Read (\S+) and follow it\.$/)![1]!;
     expect(readFileSync(brief, "utf8")).toContain("write hello.txt");
@@ -120,7 +126,13 @@ describe("worker start", () => {
   test("card worker override wins over the project and settings", async () => {
     store.updateProject(projectId, { worker: "ccd" });
     await started({ worker: "cc2" });
-    expect(herdr.commands[0]!.command).toEndWith(" cc2");
+    expect(herdr.commands[0]!.command).toContain(" cc2 --permission-mode bypassPermissions --add-dir ");
+  });
+
+  test("model, effort and mode merge field by field: card → project → settings", async () => {
+    store.updateProject(projectId, { worker: JSON.stringify({ profile: "ccd", effort: "high" }) });
+    await started({ worker: JSON.stringify({ model: "opus", mode: "plan" }) });
+    expect(herdr.commands[0]!.command).toContain(" ccd --model opus --effort high --permission-mode plan --add-dir ");
   });
 
   test("respects maxWorkers", async () => {
@@ -162,7 +174,7 @@ describe("review loop", () => {
     const inReview = store.card(card.id)!;
     expect(inReview.lane).toBe("review");
     expect(herdr.commands[1]!.command).toContain("HB_ROLE=reviewer");
-    expect(herdr.commands[1]!.command).toEndWith(" ccd");
+    expect(herdr.commands[1]!.command).toContain(" ccd --model sonnet --permission-mode bypassPermissions --add-dir ");
     expect((await p.review(card.id, true)).lane).toBe("ready");
     expect(herdr.closed).toContain(inReview.reviewer_pane!);
   });

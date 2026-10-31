@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { feedbackPrompt, orchestratorBrief, reviewerBrief, workerBrief } from "./briefs.ts";
-import type { Automation, Card, Lane, Profile, Store } from "./db.ts";
+import type { Automation, Card, Lane, Store } from "./db.ts";
 import type { AgentStatus, Herdr } from "./herdr.ts";
-import { resolveProfile } from "./profiles.ts";
+import { describeRole, launchCommand, resolveRole } from "./profiles.ts";
 import { isDue, parseTrigger } from "./scheduler.ts";
 
 const TRUST_PROMPT = "Yes, I trust this folder";
@@ -17,6 +17,8 @@ export interface PipelineOptions {
 
 export class Pipeline {
   private launching = new Set<number>();
+  /** pane id → agent status from the last sync, for the UI. */
+  statuses = new Map<string, AgentStatus>();
   private ticking = false;
   private pollMs: number;
   private launchTimeoutMs: number;
@@ -73,7 +75,7 @@ export class Pipeline {
   private async startWorker(id: number): Promise<void> {
     let card = this.store.card(id)!;
     const project = this.store.project(card.project_id)!;
-    const profile = resolveProfile(this.store.settings(), "worker", project, card);
+    const role = resolveRole(this.store.settings(), "worker", project, card);
     if (card.worktree) {
       const branch = `hb/${card.id}-${slug(card.title)}`;
       const wt = await this.herdr.worktreeCreate(project.path, branch, project.base);
@@ -84,19 +86,19 @@ export class Pipeline {
       card = this.store.updateCard(id, { cwd: project.path, workspace_id: tab.workspaceId, tab_id: tab.tabId, worker_pane: tab.paneId });
     }
     const brief = this.writeBrief(`cards/${id}/worker.md`, workerBrief(card, project));
-    await this.launch(card.worker_pane!, profile, `HB_CARD=${id} HB_ROLE=worker`, `hb-${id}-worker`, brief);
-    this.store.log(id, `worker ${profile.name} started in ${card.worker_pane}`);
+    await this.launch(card.worker_pane!, launchCommand(role), `HB_CARD=${id} HB_ROLE=worker`, `hb-${id}-worker`, brief);
+    this.store.log(id, `worker started in ${card.worker_pane}: ${describeRole(role)}`);
   }
 
   private async startReviewer(id: number): Promise<void> {
     const card = this.store.card(id)!;
     const project = this.store.project(card.project_id)!;
-    const profile = resolveProfile(this.store.settings(), "reviewer", project, card);
+    const role = resolveRole(this.store.settings(), "reviewer", project, card);
     const pane = await this.herdr.split(card.worker_pane!, card.cwd!);
     this.store.updateCard(id, { reviewer_pane: pane, worked: 0 });
     const brief = this.writeBrief(`cards/${id}/reviewer.md`, reviewerBrief(card, project));
-    await this.launch(pane, profile, `HB_CARD=${id} HB_ROLE=reviewer`, `hb-${id}-reviewer`, brief);
-    this.store.log(id, `reviewer ${profile.name} started in ${pane}`);
+    await this.launch(pane, launchCommand(role), `HB_CARD=${id} HB_ROLE=reviewer`, `hb-${id}-reviewer`, brief);
+    this.store.log(id, `reviewer started in ${pane}: ${describeRole(role)}`);
   }
 
   /**
@@ -104,8 +106,11 @@ export class Pipeline {
    * agent settle, then names it and hands it the brief. Folder trust for a new
    * worktree is answered here: registering the project is the trust decision.
    */
-  private async launch(pane: string, profile: Profile, env: string, name: string, briefPath: string): Promise<void> {
-    await this.herdr.run(pane, `${env} HB_URL=${this.opts.url} ${profile.command}`);
+  private async launch(pane: string, command: string, env: string, name: string, briefPath: string): Promise<void> {
+    // The brief lives outside the worktree; without this every non-bypass mode
+    // asks permission just to read it.
+    const briefDir = briefPath.slice(0, briefPath.lastIndexOf("/"));
+    await this.herdr.run(pane, `${env} HB_URL=${this.opts.url} ${command} --add-dir ${shellQuote(briefDir)}`);
     const deadline = Date.now() + this.launchTimeoutMs;
     let settled = 0;
     while (Date.now() < deadline) {
@@ -139,9 +144,9 @@ export class Pipeline {
   // ---- agent state -------------------------------------------------------
 
   async sync(): Promise<void> {
-    const watched = this.store.cards().filter((c) => LIVE.includes(c.lane) || (c.lane === "needs_you" && c.resume_lane));
-    if (!watched.length) return;
     const agents = await this.herdr.agents();
+    this.statuses = agents;
+    const watched = this.store.cards().filter((c) => LIVE.includes(c.lane) || (c.lane === "needs_you" && c.resume_lane));
     for (const card of watched) {
       if (this.launching.has(card.id)) continue;
       const pane = this.activePane(card);
@@ -173,7 +178,7 @@ export class Pipeline {
     }
   }
 
-  private activePane(card: Card): string | null {
+  activePane(card: Card): string | null {
     const lane = card.lane === "needs_you" ? card.resume_lane : card.lane;
     return lane === "review" ? card.reviewer_pane : card.worker_pane;
   }
@@ -295,12 +300,12 @@ export class Pipeline {
       await this.herdr.focus(project.orch_pane);
       return;
     }
-    const profile = resolveProfile(this.store.settings(), "orchestrator", project);
+    const role = resolveRole(this.store.settings(), "orchestrator", project);
     const tab = await this.herdr.tabIn(project.path, "hb-orchestrator");
     this.store.updateProject(projectId, { orch_pane: tab.paneId });
     const brief = this.writeBrief(`projects/${projectId}/orchestrator.md`, orchestratorBrief(project));
     const env = `HB_PROJECT=${shellQuote(project.name)} HB_ROLE=orchestrator`;
-    await this.launch(tab.paneId, profile, env, `hb-orch-${slug(project.name, 20)}`, brief);
+    await this.launch(tab.paneId, launchCommand(role), env, `hb-orch-${slug(project.name, 20)}`, brief);
     await this.herdr.focus(tab.paneId);
   }
 

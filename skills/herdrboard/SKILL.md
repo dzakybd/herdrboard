@@ -48,6 +48,7 @@ Options for `card add`:
 - `--no-review`: skip the reviewer.
 - `--no-worktree`: run in the main checkout (no branch).
 - `--worker <profile>` / `--reviewer <profile>`: profile names come from the board's Settings.
+- `--model <m>`, `--effort low|medium|high|xhigh|max`, `--mode bypassPermissions|acceptEdits|auto|manual|dontAsk|plan`: apply to the worker; unset fields use the board's defaults. Use a stronger model or higher effort only for hard cards. Any mode other than `bypassPermissions` makes the worker stop at permission prompts, which show the card in `needs_you`.
 
 The worker sees only the brief. Make each brief self-contained: goal, relevant files, constraints, and how to verify. Keep cards independent so they can run in parallel.
 
@@ -71,6 +72,10 @@ hb automation run <name>           # fire now
 ```
 
 Trigger forms: `every 30m|2h|1d`, `daily HH:MM`, `weekly mon HH:MM`. Each fire creates a Todo card. It is skipped while the automation's previous card is still open.
+
+## Phone access
+
+`hb url` prints a link with the access token for opening the board on another device. Give it only to the user, never paste it into a card, a commit, or a shared channel.
 
 ## Rules
 

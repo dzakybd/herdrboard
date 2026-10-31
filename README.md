@@ -3,7 +3,7 @@
 A kanban board and automation layer for coding agents that run in [herdr](https://herdr.dev). Each agent is an ordinary, interactive Claude Code session in a herdr pane, so you can watch it and talk to it in Ovis or the herdr TUI. The board tells them what to do and keeps track of where each task is.
 
 - **Card pipeline.** A card in Todo gets its own git worktree (a herdr workspace) and a worker agent. When the worker runs `hb done`, a reviewer agent opens in a split pane. If the reviewer asks for changes, the feedback goes back to the worker, up to 2 rounds; after that the card goes to *Needs you*. You can turn review off per card or per project.
-- **Profiles per role.** Orchestrator, worker, and reviewer each use a profile: a command typed into the pane, such as your `cc1`/`cc2`/`ccd` zsh functions. Profiles are picked up from `~/.zshrc` on first run. You can override them per project and per card.
+- **Profiles per role.** Orchestrator, worker, and reviewer each use a profile (a command typed into the pane, such as your `cc1`/`cc2`/`ccd` zsh functions, picked up from `~/.zshrc` on first run) plus an optional **model**, **effort** (`low` … `max`), and **permission mode** (default `bypassPermissions`). They are appended as `--model`, `--effort` and `--permission-mode`. Set defaults in Settings and override them per project, per card, or per automation; each field falls back to the next level on its own.
 - **Orchestrator.** One agent per project, running in the main checkout. Tell it what you want (in herdr or from the board) and it turns that into cards with `hb card add`.
 - **Automations.** `every 30m`, `daily 09:00`, or `weekly mon 09:00`. Each fire creates a card in Todo. If the automation's previous card is still open, the fire is skipped.
 - **Needs you.** A card lands here when the agent is waiting on a permission prompt, runs `hb ask`, stops without reporting, or exits. Reply from the card, or answer in the agent's terminal. Either way, the card goes back to its lane once the agent is working again.
@@ -24,6 +24,12 @@ git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 open http://127.0.0.1:7420
 ```
 
+## Phone and other devices
+
+The board listens on `0.0.0.0:7420` (`HB_HOST` to change). Because agents can run with bypassed permissions, access from any other device needs a token. Run `hb url` on the Mac and open the link once on your phone: it sets a cookie and redirects to the board. The token lives in `~/.herdrboard/token` (mode 600); delete the file and restart to rotate it. This Mac (the CLI and agents) needs no token.
+
+This is plain HTTP, so only open it on a network you trust, or put it behind Tailscale.
+
 Add a project with **Projects** (or `hb project add <repo>`), check the profiles under **Settings**, then create a card.
 
 Adding a repository means you trust it. Claude Code asks "do you trust this folder?" for every new worktree, and herdrboard answers yes. It answers that prompt and no other.
@@ -39,6 +45,10 @@ hb review --changes "1. … 2. …"
 hb ask "Which provider should I use?"    # any agent
 hb card add "Title" --brief "…"          # orchestrator
 ```
+
+`hb card add` and `hb automation add` also take `--model`, `--effort` and `--mode` for the worker.
+
+In a mode other than bypass, Claude Code asks before running `hb done` and similar commands; the card shows in *Needs you* until you approve in herdr.
 
 Agents are started with `HB_CARD`, `HB_ROLE`, `HB_URL` (and `HB_PROJECT` for the orchestrator) in their environment, so these commands need no ids.
 
