@@ -711,7 +711,7 @@ $("#newCardBtn").onclick = () => {
   const sync = () => {
     const p = projectOf(Number(f.project_id.value));
     f.review.checked = Boolean(p?.review);
-    f.worktree.checked = Boolean(p?.base); f.worktree.disabled = !p?.base;
+    f.worktree.checked = Boolean(p?.base); f.worktree.closest("label").hidden = !p?.base;
     $("#cardRoles").innerHTML = roleEditor("worker", null, { inherit: effective("worker", p) }) + roleEditor("reviewer", null, { inherit: effective("reviewer", p) });
   };
   f.project_id.onchange = sync; sync();
@@ -875,8 +875,10 @@ function loadAutoForm(a = null) {
   syncSchedule();
   const roles = (worker, reviewer) => {
     const p = projectOf(Number(f.project_id.value));
-    f.worktree.disabled = !p?.base;
+    f.worktree.closest("label").hidden = !p?.base;
     if (!p?.base) f.worktree.checked = false;
+    else if (!editingAuto) f.worktree.checked = true;
+    if (!editingAuto) f.review.checked = Boolean(p?.review);
     $("#autoRoles").innerHTML = roleEditor("worker", worker, { inherit: effective("worker", p) }) + roleEditor("reviewer", reviewer, { inherit: effective("reviewer", p) });
   };
   f.project_id.onchange = () => roles(readRole($('#autoRoles [data-role="worker"]')), readRole($('#autoRoles [data-role="reviewer"]')));
