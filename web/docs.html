@@ -151,7 +151,7 @@ flowchart LR
           <pre>git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 ./scripts/install.sh</pre></li>
         <li><b>Open the board</b> at <a href="http://127.0.0.1:7420">http://127.0.0.1:7420</a>. On your phone, run <code>hb url</code> and open that link once (see <a href="#phone">Phone access</a>).</li>
-        <li><b>Add a project.</b> Open <span class="icon">folder_open</span> Projects, press <b>Browse</b>, click through to your repository (git repos are marked), then <b>Add project</b>. A folder of several repositories works too: workers pick the repositories and make their own worktrees under <code>.hb-worktrees/&lt;card&gt;/</code>, which Finish leaves in place.</li>
+        <li><b>Add a project.</b> Open <span class="icon">folder_open</span> Projects, press <b>Browse</b>, click through to your repository (git repos are marked), then <b>Add project</b>. A folder of several repositories works too: workers pick the repositories and make their own worktrees under <code>.hb-worktrees/&lt;card&gt;/</code>, which Finish removes when they have no uncommitted changes (branches stay; anything left is noted in the card's activity).</li>
         <li><b>Check the agents.</b> In <span class="icon">settings</span> Settings, pick the profile, model, effort and mode for the orchestrator, worker and reviewer. Your <code>cc1</code>…<code>cc4</code>, <code>ccd</code> functions are already listed.</li>
         <li><b>Create a card</b> with <b>New card</b>. Write the brief as if for a new teammate: the worker sees only the brief. Leave it in Todo and a worker starts within a few seconds.</li>
         <li><b>Watch it</b> on the board, or press <b>Open in herdr</b> on the card to jump to the live session in Ovis.</li>
@@ -185,9 +185,9 @@ stateDiagram-v2
         <tr><td>Review</td><td>A reviewer agent is checking the diff in a pane next to the worker.</td></tr>
         <tr><td>Needs you</td><td>An agent is waiting on you. The card says why.</td></tr>
         <tr><td>Ready</td><td>Done and (if review was on) approved. The branch has the commits.</td></tr>
-        <tr><td>Done</td><td>Finished: the worktree is removed, the branch is kept. Hidden after 3 days.</td></tr>
+        <tr><td>Done</td><td>Finished: the worktree is removed, the branch is kept (an automation's branch with no commits is deleted). Hidden after 3 days.</td></tr>
       </table></div>
-      <div class="note"><span class="icon">info</span><p><b>Finish</b> (or dragging to Done) removes the card's worktree and closes its herdr workspace. herdr refuses if there is uncommitted work. Merging the branch or opening a PR is up to you, or put "open a PR" in the brief.</p></div>
+      <div class="note"><span class="icon">info</span><p><b>Finish</b> (or dragging to Done) removes the card's worktree and closes its herdr workspace. herdr refuses if there is uncommitted work. Merging the branch or opening a PR is up to you, or put "open a PR" in the brief. An automation card's branch that has no commits is deleted, so frequent runs leave nothing behind.</p></div>
     </section>
 
     <section id="lifecycle">
@@ -258,7 +258,8 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
         <tr><td>Every week</td><td><code>weekly mon 09:00</code></td><td>every Monday at 09:00</td></tr>
         <tr><td>On an interval</td><td><code>every 30m</code> · <code>every 2h</code> · <code>every 1d</code></td><td>at that interval</td></tr>
       </table></div>
-      <p>If the Mac was asleep at the scheduled time, it fires once on wake. An automation has one card at a time. If its previous card is in Ready, the next fire finishes it for you (the worktree is removed, the branch is kept), so read the result before then. If that card is still in progress, or can't be finished because of uncommitted work, the fire is skipped, never queued, and the reason is in the card's activity. <b>Run</b> fires it now.</p>
+      <p>If the Mac was asleep at the scheduled time, it fires once on wake. An automation has one card at a time. If its previous card is in Ready, the next fire finishes it for you (the worktree is removed, the branch is kept unless it has no commits), so read the result before then. If that card is still in progress, or can't be finished because of uncommitted work, the fire is skipped, never queued, and the reason is in the card's activity. <b>Run</b> fires it now.</p>
+      <p>When the open card is waiting on you (Needs you, or Ready but stuck), the automation row shows <b>Blocked since</b> with the reason in red. Click it to open that card. Re-enabling a paused automation counts the schedule from that moment, so a slot missed while paused does not fire. The <span class="icon">history</span> button lists the automation's last 50 runs with their summaries, including cards that already left the board.</p>
     </section>
 
     <section id="needs-you">

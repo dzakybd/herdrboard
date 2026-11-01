@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { feedbackPrompt, orchestratorBrief, reviewerBrief, workerBrief } from "./briefs.ts";
+import type { Cleanup } from "./cleanup.ts";
 import type { Automation, Card, Lane, Store } from "./db.ts";
 import type { AgentStatus, Herdr } from "./herdr.ts";
 import { describeRole, launchCommand, resolveRole } from "./profiles.ts";
@@ -13,6 +14,8 @@ export interface PipelineOptions {
   url: string; // HB_URL handed to agents so `hb` finds this server
   pollMs?: number;
   launchTimeoutMs?: number;
+  /** Housekeeping after Finish (branches, folder worktrees). Kept out of Herdr so the pipeline stays testable. */
+  cleanup?: Cleanup;
 }
 
 export class Pipeline {
@@ -280,7 +283,8 @@ export class Pipeline {
     if (!card) throw new Error(`no card #${id}`);
     if (card.worktree && card.workspace_id) await this.herdr.worktreeRemove(card.workspace_id);
     else if (card.tab_id) await this.herdr.closeTab(card.tab_id).catch(() => {});
-    this.store.log(id, card.branch ? `finished; branch ${card.branch} kept` : "finished");
+    this.store.log(id, "finished");
+    await this.cleanUp(card);
     return this.store.updateCard(id, {
       lane: "done",
       attention: null,
@@ -290,6 +294,16 @@ export class Pipeline {
       worker_pane: null,
       reviewer_pane: null,
     });
+  }
+
+  private async cleanUp(card: Card): Promise<void> {
+    try {
+      const project = this.store.project(card.project_id);
+      if (!project || !this.opts.cleanup) return;
+      for (const line of await this.opts.cleanup(card, project)) this.store.log(card.id, line);
+    } catch (e) {
+      this.store.log(card.id, `cleanup failed: ${(e as Error).message}`);
+    }
   }
 
   // ---- orchestrator ------------------------------------------------------
@@ -345,7 +359,10 @@ export class Pipeline {
       try {
         await this.finish(open.id);
       } catch (e) {
-        this.store.log(open.id, `automation ${a.name} could not finish this card, so it skipped: ${(e as Error).message}`);
+        const reason = (e as Error).message;
+        this.store.log(open.id, `automation ${a.name} could not finish this card, so it skipped: ${reason}`);
+        // Written once, so "blocked since" keeps the first failure instead of the latest run.
+        if (!open.attention) this.store.updateCard(open.id, { attention: `Automation "${a.title}" is paused until this card is finished: ${reason}` });
         return null;
       }
     }
@@ -360,6 +377,15 @@ export class Pipeline {
       reviewer: a.reviewer,
       automation_id: a.id,
     });
+  }
+
+  /** Why this automation can't start a new run: its open card waits on a human. */
+  blocked(a: Automation): { card_id: number; reason: string; since: number } | null {
+    const c = this.store.cards().find((x) => x.automation_id === a.id && x.lane !== "done");
+    if (!c) return null;
+    if (c.lane === "needs_you") return { card_id: c.id, reason: c.attention || "waiting for you", since: c.updated_at };
+    if (c.lane === "ready" && c.attention) return { card_id: c.id, reason: c.attention, since: c.updated_at };
+    return null;
   }
 
   private writeBrief(rel: string, text: string): string {

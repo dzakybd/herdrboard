@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename } from "node:path";
+import { finishCleanup } from "./cleanup.ts";
 import { LANES, Store, type Lane } from "./db.ts";
 import { gate, loadToken } from "./auth.ts";
 import { expandHome, listDirs } from "./fs.ts";
@@ -8,7 +9,8 @@ import { cliHerdr } from "./herdr.ts";
 import { Pipeline, slug } from "./pipeline.ts";
 import { defaultSettings, EFFORTS, MODES, storeRole, validateSettings } from "./profiles.ts";
 import { nextDue, parseTrigger } from "./scheduler.ts";
-import { applyImport, exportBundle, planImport, type Inspect } from "./transfer.ts";
+import { git, inspectPath } from "./inspect.ts";
+import { applyImport, exportBundle, planImport } from "./transfer.ts";
 
 export const HOME = process.env.HB_HOME ?? `${homedir()}/.herdrboard`;
 export const PORT = Number(process.env.HB_PORT ?? 7420);
@@ -23,32 +25,12 @@ function pick(body: Record<string, unknown>, fields: string[]): Record<string, a
   return Object.fromEntries(Object.entries(body).filter(([k]) => fields.includes(k)));
 }
 
-function git(path: string, ...args: string[]): string | null {
-  const r = Bun.spawnSync(["git", "-C", path, ...args]);
-  return r.exitCode === 0 ? r.stdout.toString().trim() : null;
-}
-
-/** Can this path be a project here? Keeps the export's base branch when the repository has it. */
-const inspectPath: Inspect = (raw, base) => {
-  const path = expandHome(raw);
-  if (!existsSync(path)) return { path, base, problem: `no such folder: ${path}` };
-  const real = realpathSync(path);
-  const top = git(real, "rev-parse", "--show-toplevel");
-  if (top && top !== real) return { path: real, base, problem: `use the repository root: ${top}` };
-  if (!top) return base ? { path: real, base, problem: `${real} is not a git repository, but the project uses base ${base}` } : { path: real, base };
-  if (!base) return { path: real, base, note: "this is a git repository here, but it stays a folder project" };
-  if (git(real, "rev-parse", "--verify", "--quiet", `${base}^{commit}`)) return { path: real, base };
-  const current = git(real, "symbolic-ref", "--short", "HEAD");
-  if (!current || !git(real, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")) return { path: real, base, problem: `branch ${base} not found` };
-  return { path: real, base: current, note: `branch ${base} not found, using ${current}` };
-};
-
 const ROLE_FIELDS = ["orchestrator", "worker", "reviewer"];
 
 export function serve(): void {
   mkdirSync(HOME, { recursive: true });
   const store = new Store(`${HOME}/herdrboard.db`, () => defaultSettings());
-  const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}` });
+  const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}`, cleanup: finishCleanup });
 
   /** Role override fields (name, config object or empty) → validated JSON column values. */
   const roles = <T extends Record<string, any>>(patch: T): T => {
@@ -78,6 +60,7 @@ export function serve(): void {
         automations: store.automations().map((a) => ({
           ...a,
           next_due: nextDue(parseTrigger(a.trigger), Math.max(a.last_run_at, a.created_at), now),
+          blocked: pipe.blocked(a),
         })),
       };
     },
@@ -188,7 +171,13 @@ export function serve(): void {
         // Count the new schedule from now: otherwise a slot already past today looks missed and fires.
         if (!Bun.deepEquals(parseTrigger(patch.trigger), parseTrigger(a.trigger))) patch.last_run_at = Date.now();
       }
+      // Same for re-enabling: the slots missed while it was paused must not fire.
+      if (patch.enabled && !a.enabled) patch.last_run_at = Date.now();
       return store.updateAutomation(a.id, patch);
+    },
+    "GET /api/automations/:id/runs": (_r, p) => {
+      if (!store.automation(Number(p.id))) throw new Error(`no automation #${p.id}`);
+      return store.automationCards(Number(p.id)).map(({ id, title, lane, summary, created_at, updated_at, branch }) => ({ id, title, lane, summary, created_at, updated_at, branch }));
     },
     "DELETE /api/automations/:id": (_r, p) => store.deleteAutomation(Number(p.id)),
     "POST /api/automations/:id/run": async (_r, p) => {

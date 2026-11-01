@@ -611,7 +611,7 @@ function cardHtml(c) {
   ].filter(Boolean).join("");
   return `<article class="card" draggable="true" tabindex="0" data-id="${c.id}" aria-label="${esc(c.title)}">
     <div class="t">${esc(c.title)}</div>${status}
-    ${c.lane === "needs_you" && c.attention ? `<div class="why">${esc(c.attention)}</div>` : ""}
+    ${(c.lane === "needs_you" || c.lane === "ready") && c.attention ? `<div class="why">${esc(c.attention)}</div>` : ""}
     <div class="chips">${chips}</div></article>`;
 }
 
@@ -624,12 +624,12 @@ async function renderSheet() {
   const started = Boolean(c.workspace_id);
   const live = ["working", "review"].includes(c.lane) || (c.lane === "needs_you" && c.resume_lane);
   const closed = ["ready", "done"].includes(c.lane);
-  $("#sheetHead").innerHTML = `
+  const head = `
     <div class="chips"><span class="chip ${c.lane === "needs_you" ? "err" : c.lane === "ready" ? "ok" : "tonal"}">${icon(LANES[c.lane][1])}${LANES[c.lane][0]}</span>
       ${full.agent_status && live ? `<span class="chip"><span class="dot ${full.agent_status}"></span>${STATUS_LABEL[full.agent_status]}</span>` : ""}
       <span class="chip">#${c.id}</span><span class="chip">${icon("folder")}${esc(p?.name)}</span></div>
     <div class="title-l">${esc(c.title)}</div>`;
-  $("#sheetBody").innerHTML = `
+  const body = `
     ${c.attention ? `<div class="section"><div class="why" style="-webkit-line-clamp:unset">${esc(c.attention)}</div></div>` : ""}
     <div class="section"><div class="actions">
       ${started ? `<button class="btn tonal" id="sFocus">${icon("open_in_new")}Open in herdr</button>` : ""}
@@ -647,8 +647,13 @@ async function renderSheet() {
     ${c.branch || c.cwd ? `<div class="section"><h4>Where</h4><div class="mono muted">${c.branch ? `${esc(c.branch)}<br>` : ""}${esc(c.cwd)}</div></div>` : ""}
     ${c.summary ? `<div class="section"><h4>Worker summary</h4><div class="prose md">${md(c.summary)}</div></div>` : ""}
     <div class="section"><h4>Brief</h4><div class="prose md">${md(c.brief || "(empty, so the title is the task)")}</div></div>`;
+  const events = c.events.slice().reverse().map((e) => `<li><time>${new Date(e.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time><div class="md">${md(e.text)}</div></li>`).join("");
   $("#replyBox").hidden = !live;
-  $("#sheetEvents").innerHTML = c.events.slice().reverse().map((e) => `<li><time>${new Date(e.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time><div class="md">${md(e.text)}</div></li>`).join("");
+  // Rewriting identical HTML still drops text selection and scroll, and refresh() runs every 2s.
+  const key = head + body + events;
+  if (key === sheetKey && openCard === c.id) return;
+  sheetKey = key;
+  $("#sheetHead").innerHTML = head; $("#sheetBody").innerHTML = body; $("#sheetEvents").innerHTML = events;
 
   $("#sFocus")?.addEventListener("click", () => act(() => api("POST", `/api/cards/${c.id}/focus`), "Focused in herdr"));
   $("#sDelete")?.addEventListener("click", () => act(async () => { await api("DELETE", `/api/cards/${c.id}`); closeSheet(); }, "Card deleted"));
@@ -657,7 +662,8 @@ async function renderSheet() {
   $$("#sheetBody .role").forEach((el) => el.addEventListener("change", () =>
     act(() => api("PATCH", `/api/cards/${c.id}`, { [el.dataset.role]: readRole(el) }), `${ROLES[el.dataset.role][0]} updated`)));
 }
-function openSheet(id) { openCard = id; $("#replyText").value = ""; $("#sheet").classList.add("open"); $("#scrim").classList.add("open"); renderSheet(); }
+let sheetKey = "";
+function openSheet(id) { openCard = id; sheetKey = ""; $("#replyText").value = ""; $("#sheet").classList.add("open"); $("#scrim").classList.add("open"); renderSheet(); }
 function closeSheet() { openCard = null; $("#sheet").classList.remove("open"); $("#scrim").classList.remove("open"); }
 $("#sheetClose").onclick = closeSheet;
 $("#scrim").onclick = closeSheet;
@@ -842,14 +848,16 @@ function renderAutos() {
   $("#autoList").innerHTML = S.automations.map((a) => `<div class="list-item" data-id="${a.id}">
     <div class="row">
       ${icon("schedule", "muted")}
-      <div class="grow"><div class="title-s">${esc(a.title)}</div><div class="body-s" style="white-space:normal">${esc(describeSchedule(a.trigger))} · ${esc(projectOf(a.project_id)?.name)} · ${a.enabled ? `next ${new Date(a.next_due).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}` : "paused"}</div></div>
+      <div class="grow"><div class="title-s">${esc(a.title)}</div><div class="body-s" style="white-space:normal">${esc(describeSchedule(a.trigger))} · ${esc(projectOf(a.project_id)?.name)}${a.blocked ? "" : a.enabled ? ` · next ${new Date(a.next_due).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}` : " · paused"}</div>
+        ${a.blocked ? `<button class="btn text danger sm" data-blocked="${a.blocked.card_id}" style="height:auto;padding:2px 0;text-align:left;white-space:normal" title="Open card #${a.blocked.card_id}">Blocked since ${new Date(a.blocked.since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${esc(a.blocked.reason)}</button>` : ""}</div>
       <div class="actions" style="flex-wrap:nowrap;align-items:center">
         <label class="switch" title="Enabled"><input type="checkbox" data-f="enabled" ${a.enabled ? "checked" : ""} aria-label="Enabled"></label>
         <button class="btn tonal sm" data-run>${icon("play_arrow")}Run</button>
+        <button class="icon-btn" data-history title="Run history" aria-label="Run history of ${esc(a.title)}"><span class="icon">history</span></button>
         <button class="icon-btn" data-edit title="Edit" aria-label="Edit ${esc(a.title)}"><span class="icon">edit</span></button>
         <button class="icon-btn" data-del title="Delete" aria-label="Delete ${esc(a.title)}"><span class="icon">delete</span></button>
       </div>
-    </div></div>`).join("") || `<p class="hint">No automations yet.</p>`;
+    </div><div class="runs" hidden></div></div>`).join("") || `<p class="hint">No automations yet.</p>`;
 }
 let editingAuto = null;
 /** Fills the form from `a`, or empties it for a new automation. */
@@ -889,8 +897,26 @@ $("#autoList").addEventListener("change", (e) => {
   const value = e.target.type === "checkbox" ? (e.target.checked ? 1 : 0) : e.target.value;
   act(async () => { await api("PATCH", `/api/automations/${id}`, { [f]: value }); renderAutos(); }, "Saved");
 });
+/** Opens a card's sheet from inside the automations dialog, which would otherwise cover it. */
+function openCardFromDialog(id) { $("#autoDlg").close(); openSheet(Number(id)); }
+async function toggleRuns(item) {
+  const box = $(".runs", item);
+  box.hidden = !box.hidden;
+  if (box.hidden) return;
+  box.innerHTML = `<p class="hint">Loading…</p>`;
+  const runs = await api("GET", `/api/automations/${item.dataset.id}/runs`);
+  box.innerHTML = runs.map((r) => `<div class="run" tabindex="0" role="button" data-card="${r.id}" style="padding:8px 10px;border-radius:12px;background:var(--sc);cursor:pointer;margin-top:6px">
+      <div class="chips"><span class="chip ${r.lane === "needs_you" ? "err" : r.lane === "ready" ? "ok" : "tonal"}">${LANES[r.lane][0]}</span><span class="chip">#${r.id}</span><span class="chip" style="border:0">${new Date(r.created_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span></div>
+      ${r.summary ? `<div class="prose md" style="margin-top:6px;max-height:12em;overflow:auto">${md(r.summary)}</div>` : ""}</div>`).join("") || `<p class="hint">No runs yet.</p>`;
+}
+$("#autoList").addEventListener("keydown", (e) => { const run = e.target.closest?.(".run"); if (run && e.key === "Enter") openCardFromDialog(run.dataset.card); });
 $("#autoList").addEventListener("click", (e) => {
   const id = e.target.closest(".list-item")?.dataset.id;
+  const run = e.target.closest(".run");
+  if (run) return openCardFromDialog(run.dataset.card);
+  const blocked = e.target.closest("[data-blocked]");
+  if (blocked) return openCardFromDialog(blocked.dataset.blocked);
+  if (e.target.closest("[data-history]")) toggleRuns(e.target.closest(".list-item")).catch((err) => snack(err.message, true));
   if (e.target.closest("[data-run]")) act(() => api("POST", `/api/automations/${id}/run`), "Card created");
   if (e.target.closest("[data-edit]")) {
     loadAutoForm(S.automations.find((a) => a.id === Number(id)));

@@ -1,0 +1,15 @@
+[Unit]
+Description=herdrboard
+After=network.target
+
+[Service]
+ExecStart=__BUN__ __REPO__/src/cli.ts serve
+Environment="PATH=__HOME__/.local/bin:__HOME__/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME=__HOME__"
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:__HOME__/.herdrboard/serve.log
+StandardError=append:__HOME__/.herdrboard/serve.log
+
+[Install]
+WantedBy=default.target

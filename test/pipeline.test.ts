@@ -276,6 +276,37 @@ describe("moves and finish", () => {
   });
 });
 
+describe("finish cleanup", () => {
+  test("runs after the worktree is gone, logs its notes, and a throw does not stop Finish", async () => {
+    const seen: number[] = [];
+    let boom = false;
+    const q = new Pipeline(store, herdr, {
+      home: mkdtempSync(`${tmpdir()}/hb-`),
+      url: "http://127.0.0.1:7420",
+      pollMs: 1,
+      launchTimeoutMs: 500,
+      cleanup: async (c) => {
+        seen.push(herdr.removed.length);
+        if (boom) throw new Error("disk on fire");
+        return ["cleanup note"];
+      },
+    });
+    const a = add();
+    await q.tick();
+    await q.settle();
+    expect((await q.finish(a.id)).lane).toBe("done");
+    expect(seen).toEqual([1]);
+    expect(store.events(a.id).map((e) => e.text)).toContain("cleanup note");
+
+    boom = true;
+    const b = add();
+    await q.tick();
+    await q.settle();
+    expect((await q.finish(b.id)).lane).toBe("done");
+    expect(store.events(b.id).map((e) => e.text)).toContain("cleanup failed: disk on fire");
+  });
+});
+
 describe("folder projects", () => {
   test("a card runs in the folder and Finish closes its tab", async () => {
     const folder = store.addProject({ name: "many", path: "/repos", base: "" });
@@ -324,5 +355,43 @@ describe("automations", () => {
     expect(await p.fire(a)).toBeNull();
     expect(store.card(first.id)!.lane).toBe("ready");
     expect(store.cards()).toHaveLength(1);
+    expect(store.card(first.id)!.attention).toContain("uncommitted changes");
+    expect(p.blocked(a)).toMatchObject({ card_id: first.id, reason: expect.stringContaining("uncommitted changes") });
+  });
+
+  test("a later successful finish clears the block", async () => {
+    const a = sweep();
+    const first = (await p.fire(a))!;
+    store.updateCard(first.id, { lane: "ready", worktree: 1, workspace_id: "w9" });
+    let fail = true;
+    herdr.worktreeRemove = async () => {
+      if (fail) throw new Error("uncommitted changes");
+    };
+    await p.fire(a);
+    fail = false;
+    expect((await p.fire(a))!.lane).toBe("todo");
+    expect(store.card(first.id)!.attention).toBeNull();
+    expect(p.blocked(a)).toBeNull();
+  });
+
+  test("blocked reports an open needs_you card, not working or Ready without attention", async () => {
+    const a = sweep();
+    expect(p.blocked(a)).toBeNull();
+    const c = (await p.fire(a))!;
+    store.updateCard(c.id, { lane: "working" });
+    expect(p.blocked(a)).toBeNull();
+    const asked = store.updateCard(c.id, { lane: "needs_you", attention: "which branch?" });
+    expect(p.blocked(a)).toEqual({ card_id: c.id, reason: "which branch?", since: asked.updated_at });
+    store.updateCard(c.id, { lane: "ready", attention: null });
+    expect(p.blocked(a)).toBeNull();
+  });
+
+  test("automationCards lists newest first, capped", async () => {
+    const a = sweep();
+    const first = (await p.fire(a))!;
+    store.updateCard(first.id, { lane: "ready" });
+    const second = (await p.fire(a))!;
+    expect(store.automationCards(a.id).map((c) => c.id)).toEqual([second.id, first.id]);
+    expect(store.automationCards(a.id, 1)).toHaveLength(1);
   });
 });

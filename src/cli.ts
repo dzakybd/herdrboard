@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 
 const URL_BASE = process.env.HB_URL ?? `http://127.0.0.1:${process.env.HB_PORT ?? 7420}`;
@@ -143,8 +144,9 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
   case "url": {
     const { HOME, PORT } = await import("./server.ts");
     const { loadToken } = await import("./auth.ts");
-    const host = Bun.spawnSync(["scutil", "--get", "LocalHostName"]).stdout.toString().trim().toLowerCase();
-    console.log(`http://${host ? `${host}.local` : "127.0.0.1"}:${PORT}/?token=${loadToken(HOME)}`);
+    const bonjour = process.platform === "darwin" ? Bun.spawnSync(["scutil", "--get", "LocalHostName"]).stdout.toString().trim().toLowerCase() : "";
+    const host = bonjour ? `${bonjour}.local` : hostname() || "127.0.0.1";
+    console.log(`http://${host}:${PORT}/?token=${loadToken(HOME)}`);
     break;
   }
   case "project add": {

@@ -71,7 +71,7 @@ hb automation add --title "<t>" --trigger "every 30m" --brief "<b>" [--no-worktr
 hb automation run <name>           # fire now; the name is generated from the title, see `hb automation list`
 ```
 
-Trigger forms: `every 30m|2h|1d`, `daily HH:MM`, `weekdays HH:MM`, `weekly mon HH:MM`. Each fire creates a Todo card. If the automation's previous card is in Ready, the fire finishes it first (its worktree is removed, its branch kept). If that card is still in progress, the fire is skipped.
+Trigger forms: `every 30m|2h|1d`, `daily HH:MM`, `weekdays HH:MM`, `weekly mon HH:MM`. Each fire creates a Todo card. If the automation's previous card is in Ready, the fire finishes it first (its worktree is removed; its branch is kept unless it has no commits). If that card is still in progress, the fire is skipped.
 
 ## Phone access
 

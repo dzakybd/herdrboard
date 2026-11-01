@@ -233,6 +233,11 @@ export class Store {
     this.db.query("DELETE FROM cards WHERE id = ?").run(id);
   }
 
+  /** An automation's cards, newest first. */
+  automationCards(automationId: number, limit = 50): Card[] {
+    return this.db.query("SELECT * FROM cards WHERE automation_id = ? ORDER BY id DESC LIMIT ?").all(automationId, limit) as Card[];
+  }
+
   log(cardId: number, text: string): void {
     this.db.query("INSERT INTO events (card_id, at, text) VALUES (?, ?, ?)").run(cardId, Date.now(), text);
   }

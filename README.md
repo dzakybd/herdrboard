@@ -24,6 +24,14 @@ git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 open http://127.0.0.1:7420
 ```
 
+On Linux the same script installs a systemd user unit (`~/.config/systemd/user/dev.dzaky.herdrboard.service`). Run `sudo loginctl enable-linger $USER` once so it survives logout.
+
+```sh
+systemctl --user status dev.dzaky.herdrboard
+systemctl --user restart dev.dzaky.herdrboard
+journalctl --user -u dev.dzaky.herdrboard   # or ~/.herdrboard/serve.log
+```
+
 The full guide, with diagrams, is built into the board at **http://127.0.0.1:7420/docs** (the book icon in the top bar).
 
 ## Phone and other devices
@@ -34,7 +42,7 @@ This is plain HTTP, so only open it on a network you trust, or put it behind Tai
 
 Add a project with **Projects → Browse** (a folder picker that marks git repositories), or `hb project add <repo>`,, check the profiles under **Settings**, then create a card.
 
-A project can also be a folder that holds several repositories. Cards there run in that folder, and the worker picks the repositories and makes its own worktrees under `.hb-worktrees/<card>/`. Finish does not remove those worktrees.
+A project can also be a folder that holds several repositories. Cards there run in that folder, and the worker picks the repositories and makes its own worktrees under `.hb-worktrees/<card>/`. Finish removes each of those worktrees that has no uncommitted changes (their branches are kept) and reports any it leaves.
 
 Adding a project means you trust it. Claude Code asks "do you trust this folder?" for every new worktree, and herdrboard answers yes. It answers that prompt and no other.
 
@@ -78,7 +86,7 @@ The skill (`skills/herdrboard/SKILL.md`) covers filing cards, watching progress,
 
 Only through the `herdr` CLI: `worktree create/remove`, `tab create`, `pane run/split/close/read`, and `agent list/rename/prompt/focus/send-keys`. An agent is launched by typing `HB_CARD=… <profile command>` into a fresh shell pane. The board then waits for herdr to report the agent as idle, names it `hb-<card>-<role>`, and prompts it with the path of a brief file (`~/.herdrboard/cards/<id>/worker.md`). Lane changes come from `hb` reports plus herdr's agent status, polled every 3 s.
 
-**Finish** (dragging a card to Done) removes the card's worktree; herdr refuses if there is uncommitted work. The branch is kept: merging or opening a PR is up to you, or put it in the brief.
+**Finish** (dragging a card to Done) removes the card's worktree; herdr refuses if there is uncommitted work. The branch is kept: merging or opening a PR is up to you, or put it in the brief. The exception is an automation's card whose branch has no commits beyond the base: that empty local branch is deleted, so frequent runs don't pile up branches.
 
 ## Files
 

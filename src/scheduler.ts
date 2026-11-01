@@ -60,7 +60,8 @@ function lastSlotAtOrBefore(t: Exclude<Trigger, { type: "every" }>, now: number)
 /**
  * `last` is the last fire time, floored at the automation's creation time.
  * Clock triggers are due when a slot passed after `last`, so a slot missed
- * while the machine slept fires on the first tick after wake.
+ * while the machine slept fires on the first tick after wake. Changing the
+ * trigger or re-enabling resets `last` to now, so those never fire at once.
  */
 export function isDue(t: Trigger, last: number, now: number): boolean {
   if (t.type === "every") return now - last >= t.ms;
