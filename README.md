@@ -32,6 +32,10 @@ systemctl --user restart dev.dzaky.herdrboard
 journalctl --user -u dev.dzaky.herdrboard   # or ~/.herdrboard/serve.log
 ```
 
+### Updating while agents are running
+
+Pull or edit the code, then run `hb restart`. Agents live in herdr, not in the board, so they keep running. On shutdown the board stops taking requests, lets any worker or reviewer that is mid-launch finish (up to 60s), then exits. An agent's `hb done` or `hb ask` made during the restart waits up to 60s for the board to come back instead of failing. `./scripts/install.sh` also applies the longer stop timeout (`ExitTimeOut` / `TimeoutStopSec`) to an existing service.
+
 The full guide, with diagrams, is built into the board at **http://127.0.0.1:7420/docs** (the book icon in the top bar).
 
 ## Phone and other devices

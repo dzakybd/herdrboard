@@ -1,4 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { attachmentDir, listAttachments, saveAttachments } from "./attachments.ts";
 import { feedbackPrompt, orchestratorBrief, reviewerBrief, workerBrief } from "./briefs.ts";
 import type { Cleanup } from "./cleanup.ts";
 import type { Automation, Card, Lane, Store } from "./db.ts";
@@ -23,6 +24,7 @@ export class Pipeline {
   /** pane id → agent status from the last sync, for the UI. */
   statuses = new Map<string, AgentStatus>();
   private ticking = false;
+  private draining = false;
   private pollMs: number;
   private launchTimeoutMs: number;
 
@@ -45,7 +47,7 @@ export class Pipeline {
   }
 
   async tick(now = Date.now()): Promise<void> {
-    if (this.ticking) return;
+    if (this.ticking || this.draining) return;
     this.ticking = true;
     try {
       await this.runAutomations(now);
@@ -56,6 +58,19 @@ export class Pipeline {
     }
   }
 
+  /**
+   * For a planned restart: starts nothing new, then waits (up to `ms`) for the
+   * tick and every launch in flight to finish. Running agents live in herdr and
+   * are not touched; only a half-done launch would be lost, and this keeps it
+   * from being cut off.
+   */
+  async drain(ms: number): Promise<boolean> {
+    this.draining = true;
+    const deadline = Date.now() + ms;
+    while ((this.launching.size || this.ticking) && Date.now() < deadline) await Bun.sleep(50);
+    return !this.launching.size && !this.ticking;
+  }
+
   /** Resolves once every launch in flight has finished (tests use this). */
   async settle(): Promise<void> {
     while (this.launching.size) await Bun.sleep(5);
@@ -64,6 +79,7 @@ export class Pipeline {
   // ---- queue -------------------------------------------------------------
 
   startQueued(): void {
+    if (this.draining) return;
     const { maxWorkers } = this.store.settings();
     let active = LIVE.reduce((n, lane) => n + this.store.cardsIn(lane).length, 0);
     for (const card of this.store.cardsIn("todo")) {
@@ -89,7 +105,7 @@ export class Pipeline {
       const tab = await this.herdr.tabIn(project.path, `hb-${card.id}`);
       card = this.store.updateCard(id, { cwd: project.path, workspace_id: tab.workspaceId, tab_id: tab.tabId, worker_pane: tab.paneId });
     }
-    const brief = this.writeBrief(`cards/${id}/worker.md`, workerBrief(card, project));
+    const brief = this.writeBrief(`cards/${id}/worker.md`, workerBrief(card, project, this.attachmentFiles(id)));
     await this.launch(card.worker_pane!, launchCommand(role), `HB_CARD=${id} HB_ROLE=worker`, `hb-${id}-worker`, brief);
     this.store.log(id, `worker started in ${card.worker_pane}: ${describeRole(role)}`);
   }
@@ -100,7 +116,7 @@ export class Pipeline {
     const role = resolveRole(this.store.settings(), "reviewer", project, card);
     const pane = await this.herdr.split(card.worker_pane!, card.cwd!);
     this.store.updateCard(id, { reviewer_pane: pane, worked: 0 });
-    const brief = this.writeBrief(`cards/${id}/reviewer.md`, reviewerBrief(card, project));
+    const brief = this.writeBrief(`cards/${id}/reviewer.md`, reviewerBrief(card, project, this.attachmentFiles(id)));
     await this.launch(pane, launchCommand(role), `HB_CARD=${id} HB_ROLE=reviewer`, `hb-${id}-reviewer`, brief);
     this.store.log(id, `reviewer started in ${pane}: ${describeRole(role)}`);
   }
@@ -228,7 +244,8 @@ export class Pipeline {
   ask(id: number, question: string): Card {
     const card = this.store.card(id);
     if (!card) throw new Error(`no card #${id}`);
-    this.needsYou(card, question, LIVE.includes(card.lane) ? card.lane : card.resume_lane);
+    // From Ready the agent is offering something: the answer puts it back to work.
+    this.needsYou(card, question, LIVE.includes(card.lane) ? card.lane : card.lane === "ready" ? "working" : card.resume_lane);
     return this.store.card(id)!;
   }
 
@@ -249,13 +266,32 @@ export class Pipeline {
 
   // ---- human actions -----------------------------------------------------
 
-  async reply(id: number, text: string): Promise<void> {
+  /**
+   * Sends the human's message to the running agent. A Ready card is still open
+   * (the agent and its worktree stay until Finish), so a reply there puts it
+   * back to working: the agent's next `hb done` needs that lane.
+   */
+  async reply(id: number, text: string, uploads?: unknown, review?: boolean): Promise<void> {
     const card = this.store.card(id);
     if (!card) throw new Error(`no card #${id}`);
     const pane = this.activePane(card);
     if (!pane) throw new Error(`card #${id} has no running agent`);
-    await this.herdr.prompt(pane, text);
-    this.store.log(id, `you: ${text}`);
+    if (!text.trim() && !(Array.isArray(uploads) && uploads.length)) throw new Error("write a message or attach a file");
+    if (card.lane === "ready") {
+      const { maxWorkers } = this.store.settings();
+      if (LIVE.reduce((n, lane) => n + this.store.cardsIn(lane).length, 0) >= maxWorkers) {
+        throw new Error(`all ${maxWorkers} worker slots are busy; reply once one finishes`);
+      }
+    }
+    const files = saveAttachments(this.opts.home, id, uploads);
+    const message = files.length ? `${text}\n\nAttached files:\n${files.map((f) => `- ${f}`).join("\n")}`.trim() : text;
+    await this.herdr.prompt(pane, message);
+    this.store.log(id, `you: ${message}`);
+    if (card.lane === "ready") {
+      // The human decides whether this follow-up needs another reviewer round.
+      this.store.updateCard(id, { lane: "working", attention: null, resume_lane: null, worked: 0, ...(review === undefined ? {} : { review: Number(review) }) });
+      this.store.log(id, `reply sent from ready, back to working${review === undefined ? "" : review ? " (reviewed again)" : " (no review)"}`);
+    }
   }
 
   async focus(id: number): Promise<void> {
@@ -386,6 +422,10 @@ export class Pipeline {
     if (c.lane === "needs_you") return { card_id: c.id, reason: c.attention || "waiting for you", since: c.updated_at };
     if (c.lane === "ready" && c.attention) return { card_id: c.id, reason: c.attention, since: c.updated_at };
     return null;
+  }
+
+  private attachmentFiles(id: number): string[] {
+    return listAttachments(this.opts.home, id).map((a) => `${attachmentDir(this.opts.home, id)}/${a.name}`);
   }
 
   private writeBrief(rel: string, text: string): string {

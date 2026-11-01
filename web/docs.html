@@ -122,6 +122,7 @@ main { min-width: 0; }
     <a href="#orchestrator">Orchestrator</a>
     <a href="#automations">Automations</a>
     <a href="#needs-you">Needs you</a>
+    <a href="#attachments">Attachments and follow-ups</a>
     <a href="#phone">Phone access</a>
     <a href="#cli">CLI reference</a>
     <a href="#skill">Agent skill</a>
@@ -174,6 +175,8 @@ stateDiagram-v2
   Working --> NeedsYou: blocked · hb ask · stopped · exited
   Review --> NeedsYou: blocked · stopped
   NeedsYou --> Working: agent works again
+  Ready --> Working: you reply
+  Ready --> NeedsYou: agent offers something · hb ask
   Ready --> Done: Finish
   Done --> [*]
       </pre></div>
@@ -184,7 +187,7 @@ stateDiagram-v2
         <tr><td>Working</td><td>A worker is on it, in its own git worktree and branch <code>hb/&lt;id&gt;-&lt;slug&gt;</code>.</td></tr>
         <tr><td>Review</td><td>A reviewer agent is checking the diff in a pane next to the worker.</td></tr>
         <tr><td>Needs you</td><td>An agent is waiting on you. The card says why.</td></tr>
-        <tr><td>Ready</td><td>Done and (if review was on) approved. The branch has the commits.</td></tr>
+        <tr><td>Ready</td><td>Done and (if review was on) approved. The branch has the commits. The agent is still open: <a href="#attachments">reply to it</a> to confirm what it offered or ask for more.</td></tr>
         <tr><td>Done</td><td>Finished: the worktree is removed, the branch is kept (an automation's branch with no commits is deleted). Hidden after 3 days.</td></tr>
       </table></div>
       <div class="note"><span class="icon">info</span><p><b>Finish</b> (or dragging to Done) removes the card's worktree and closes its herdr workspace. herdr refuses if there is uncommitted work. Merging the branch or opening a PR is up to you, or put "open a PR" in the brief. An automation card's branch that has no commits is deleted, so frequent runs leave nothing behind.</p></div>
@@ -275,6 +278,13 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
       </table></div>
     </section>
 
+    <section id="attachments">
+      <h2>Attachments and follow-ups</h2>
+      <p><b>Attachments.</b> In <b>New card</b>, press <b>Attach files</b>, or drop files or paste a screenshot into the dialog. The same paperclip is in <b>Reply to the agent</b>. The files are saved under <code>~/.herdrboard/cards/&lt;id&gt;/attachments/</code> (25 MB each, 20 per card) and the agent gets their paths in its brief or in your reply. Images show as thumbnails on the card; other files download. From the CLI: <code>hb card add … --attach shot.png</code> or <code>hb card attach &lt;id&gt; file…</code>. Files of a card that has been Done for 30 days are deleted.</p>
+      <p><b>Replying in Ready.</b> A Ready card keeps its agent and worktree until you Finish it, so you can still talk to it: answer something it offered, or ask for more. Sending a reply puts the card back to <span class="lane-chip">Working</span>; the agent's next <code>hb done</code> brings it back to Ready. Tick <b>Review again before Ready</b> if the follow-up changes code and deserves another reviewer round; by default it skips review. A reply needs a free worker slot, like any other card.</p>
+      <p>When the agent wants to offer something, it runs <code>hb ask</code>: the card goes to <span class="lane-chip">Needs you</span> with the question, and your answer sends it back to Working.</p>
+    </section>
+
     <section id="phone">
       <h2>Phone access</h2>
       <p>The board listens on all interfaces (port 7420). Because agents can run with bypassed permissions, every device other than the Mac needs a token.</p>
@@ -283,7 +293,7 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
         <li>Open that link on your phone once. It stores a cookie and drops the token from the address bar.</li>
         <li>From then on, <code>http://your-mac.local:7420</code> just works on that phone. Add it to your home screen.</li>
       </ol>
-      <div class="note warn"><span class="icon">lock</span><p>It is plain HTTP: use it only on a network you trust, or reach it through Tailscale. To revoke every device, delete <code>~/.herdrboard/token</code> and run <code>launchctl kickstart -k gui/$(id -u)/dev.dzaky.herdrboard</code>.</p></div>
+      <div class="note warn"><span class="icon">lock</span><p>It is plain HTTP: use it only on a network you trust, or reach it through Tailscale. To revoke every device, delete <code>~/.herdrboard/token</code> and run <code>hb restart</code>.</p></div>
     </section>
 
     <section id="cli">
@@ -292,7 +302,8 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
       <div class="table-wrap"><table>
         <tr><th>Command</th><th>Does</th></tr>
         <tr><td><code>hb project add &lt;path&gt;</code></td><td>Register a repository or a folder of repositories</td></tr>
-        <tr><td><code>hb card add "&lt;title&gt;" --brief "…"</code></td><td>Create a card in Todo. Add <code>--backlog</code>, <code>--no-review</code>, <code>--no-worktree</code>, <code>--worker cc2</code>, <code>--model</code>, <code>--effort</code>, <code>--mode</code></td></tr>
+        <tr><td><code>hb card add "&lt;title&gt;" --brief "…"</code></td><td>Create a card in Todo. Add <code>--backlog</code>, <code>--no-review</code>, <code>--no-worktree</code>, <code>--attach FILE</code> (repeatable), <code>--worker cc2</code>, <code>--model</code>, <code>--effort</code>, <code>--mode</code></td></tr>
+        <tr><td><code>hb card attach &lt;id&gt; &lt;file&gt;…</code></td><td>Add images or files to a card</td></tr>
         <tr><td><code>hb card list [--lane needs_you]</code></td><td>List open cards</td></tr>
         <tr><td><code>hb card show &lt;id&gt;</code></td><td>Brief, summary, branch and activity log</td></tr>
         <tr><td><code>hb card move &lt;id&gt; todo|backlog|done</code></td><td>Start, park or finish a card</td></tr>
@@ -303,6 +314,7 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
         <tr><td><code>hb automation add|list|run</code></td><td>Manage automations</td></tr>
         <tr><td><code>hb export [file]</code></td><td>Save projects, automations, card history and settings as JSON (also in Settings)</td></tr>
         <tr><td><code>hb import &lt;file&gt; [--dry-run] [--path P=PATH] [--skip P]</code></td><td>Check an export against this machine, then import it, all or nothing (also in Settings)</td></tr>
+        <tr><td><code>hb restart</code></td><td>Restart the service. Running agents are not touched: the board finishes any launch in flight first, and an agent's <code>hb done</code> / <code>hb ask</code> waits up to 60s for it to return</td></tr>
         <tr><td><code>hb url</code></td><td>Link for your phone</td></tr>
         <tr><td><code>hb serve</code></td><td>Run the board in the foreground (launchd normally does this)</td></tr>
       </table></div>
@@ -320,14 +332,16 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
       <h3>A card is stuck in Working</h3>
       <p>Press <b>Open in herdr</b> and look at the agent. If it finished but forgot to report, tell it to run <code>hb done</code>. The board flags this on its own once the agent goes idle.</p>
       <h3>"herdrboard is not running"</h3>
-      <pre>launchctl kickstart -k gui/$(id -u)/dev.dzaky.herdrboard
+      <pre>hb restart
 tail -f ~/.herdrboard/serve.log</pre>
+      <h3>Updating the board while agents work</h3>
+      <p>Pull or edit the code, then run <code>hb restart</code>. Agents live in herdr, so they keep running. If you re-run <code>./scripts/install.sh</code> once, the service also gets a 90-second stop timeout so the board can finish a launch in flight.</p>
       <h3>Finish fails</h3>
       <p>herdr won't remove a worktree with uncommitted changes. Open it in herdr, commit or discard, then Finish again.</p>
       <h3>Where things live</h3>
       <div class="table-wrap"><table>
         <tr><td><code>~/.herdrboard/herdrboard.db</code></td><td>Projects, cards, activity, automations, settings</td></tr>
-        <tr><td><code>~/.herdrboard/cards/&lt;id&gt;/</code></td><td>Briefs handed to the agents</td></tr>
+        <tr><td><code>~/.herdrboard/cards/&lt;id&gt;/</code></td><td>Briefs handed to the agents, and <code>attachments/</code></td></tr>
         <tr><td><code>~/.herdr/worktrees/&lt;repo&gt;/</code></td><td>Card worktrees (herdr's)</td></tr>
         <tr><td><code>~/.herdrboard/serve.log</code></td><td>Service log</td></tr>
       </table></div>

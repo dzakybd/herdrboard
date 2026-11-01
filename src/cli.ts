@@ -8,6 +8,7 @@ const URL_BASE = process.env.HB_URL ?? `http://127.0.0.1:${process.env.HB_PORT ?
 const HELP = `hb: herdrboard CLI
 
   hb serve                                   run the board (web UI + tick loop)
+  hb restart                                 restart the service; running agents are not touched
   hb url                                     link for your phone/other devices (carries the access token)
 
   hb export [file]                           save projects, automations, card history and settings as JSON
@@ -18,9 +19,10 @@ const HELP = `hb: herdrboard CLI
   hb project list
 
   hb card add "<title>" [--brief TEXT | --brief-file F] [--project P]
-                        [--backlog] [--no-review] [--no-worktree] [--worker PROFILE] [--reviewer PROFILE]
+                        [--attach FILE]... [--backlog] [--no-review] [--no-worktree] [--worker PROFILE] [--reviewer PROFILE]
                         [--model M] [--effort low|medium|high|xhigh|max] [--mode bypassPermissions|acceptEdits|auto|manual|dontAsk|plan]
                         (--model/--effort/--mode apply to the worker; unset = the board's defaults)
+  hb card attach <id> <file>...              add images or files to a card (the agent gets their paths)
   hb card list [--project P] [--lane L]
   hb card show <id>
   hb card move <id> <backlog|todo|done>
@@ -40,16 +42,34 @@ const HELP = `hb: herdrboard CLI
 Project defaults to $HB_PROJECT, then the registered project containing the current folder.
 `;
 
+// An agent's `hb done` / `hb ask` must survive a board restart, so inside an agent
+// a refused connection is retried for a while instead of failing the report.
+const PATIENT_MS = process.env.HB_CARD || process.env.HB_ROLE ? 60_000 : 0;
+
 async function call(method: string, path: string, body?: unknown): Promise<any> {
-  let res: Response;
-  try {
-    res = await fetch(URL_BASE + path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  } catch {
-    die(`herdrboard is not running at ${URL_BASE} (start it with \`hb serve\`)`);
+  let res: Response | undefined;
+  const give_up = Date.now() + PATIENT_MS;
+  while (!res) {
+    try {
+      res = await fetch(URL_BASE + path, { method, headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    } catch (e) {
+      if ((e as { code?: string }).code !== "ECONNREFUSED" || Date.now() >= give_up) die(`herdrboard is not running at ${URL_BASE} (start it with \`hb serve\`)`);
+      await Bun.sleep(1000);
+    }
   }
   const data = await res.json();
   if (!res.ok) die(data.error);
   return data;
+}
+
+function uploads(paths: string[]): { name: string; data: string }[] {
+  return paths.map((p) => {
+    try {
+      return { name: p.split("/").pop()!, data: readFileSync(p).toString("base64") };
+    } catch {
+      die(`can't read ${p}`);
+    }
+  });
 }
 
 function die(msg: string): never {
@@ -141,6 +161,23 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
     console.log("imported");
     break;
   }
+  case "restart": {
+    const mac = process.platform === "darwin";
+    const cmd = mac
+      ? ["launchctl", "kickstart", "-k", `gui/${process.getuid!()}/dev.dzaky.herdrboard`]
+      : ["systemctl", "--user", "restart", "dev.dzaky.herdrboard"];
+    const out = Bun.spawnSync(cmd, { stderr: "pipe" });
+    if (out.exitCode !== 0) die(`${cmd.join(" ")} failed: ${out.stderr.toString().trim()}`);
+    for (let i = 0; i < 90; i++) {
+      await Bun.sleep(1000);
+      try {
+        await fetch(`${URL_BASE}/api/state`, { headers: { "content-type": "application/json" } });
+        console.log("herdrboard restarted; running agents were not touched");
+        process.exit(0);
+      } catch {}
+    }
+    die("herdrboard did not come back within 90s; see ~/.herdrboard/serve.log");
+  }
   case "url": {
     const { HOME, PORT } = await import("./server.ts");
     const { loadToken } = await import("./auth.ts");
@@ -163,6 +200,7 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
     const { values, positionals } = args({
       brief: { type: "string" },
       "brief-file": { type: "string" },
+      attach: { type: "string", multiple: true },
       project: { type: "string" },
       backlog: { type: "boolean" },
       "no-review": { type: "boolean" },
@@ -181,10 +219,18 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
       lane: values.backlog ? "backlog" : "todo",
       review: values["no-review"] ? false : values.review ? true : undefined,
       worktree: values["no-worktree"] ? false : undefined,
+      attachments: uploads(values.attach ?? []),
       worker: workerConfig(values),
       reviewer: values.reviewer,
     });
     console.log(line(c));
+    break;
+  }
+  case "card attach": {
+    const [id, ...files] = rest;
+    if (!id || !files.length) die("usage: hb card attach <id> <file>...");
+    const all = await call("POST", `/api/cards/${id}/attachments`, { attachments: uploads(files) });
+    console.log(`#${id} attachments: ${all.map((a: any) => a.name).join(", ")}`);
     break;
   }
   case "card list": {

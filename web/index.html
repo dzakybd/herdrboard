@@ -252,6 +252,14 @@ details > .stack, details > form { margin-top: 16px; }
 .schedule { display: flex; flex-wrap: wrap; gap: 16px 12px; }
 .schedule .field { flex: 1 1 130px; }
 .divider { height: 1px; background: var(--outline-variant); }
+.attach { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.attach .chips { width: 100%; }
+.chip button { display: inline-flex; padding: 0; margin-right: -4px; color: inherit; }
+.chip button .icon { font-size: 14px; }
+.thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.thumb { display: block; width: 96px; height: 96px; border-radius: 12px; overflow: hidden; border: 1px solid var(--outline-variant); background: var(--sc-highest); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dropping { outline: 2px dashed var(--primary); outline-offset: -6px; }
 .hint { font-size: 12px; line-height: 16px; color: var(--on-surface-variant); margin: 0; }
 
 /* folder picker */
@@ -332,10 +340,15 @@ details > .stack, details > form { margin-top: 16px; }
     <div id="sheetBody"></div>
     <div class="section" id="replyBox" hidden>
       <h4>Reply to the agent</h4>
+      <p class="hint" id="replyHint" hidden>The agent is still open. Confirm what it offered or ask for more; sending puts the card back to working.</p>
       <div class="composer">
         <input id="replyText" placeholder="Sent to the running agent" aria-label="Reply to the agent">
+        <input type="file" id="replyFile" multiple hidden>
+        <button class="icon-btn sm" id="replyAttach" title="Attach files (or paste / drop)" aria-label="Attach files"><span class="icon">attach_file</span></button>
         <button class="icon-btn filled sm" id="replySend" title="Send" aria-label="Send reply"><span class="icon">arrow_upward</span></button>
       </div>
+      <div class="chips" id="replyFiles" hidden style="margin-top:8px"></div>
+      <label class="switch" id="replyReviewBox" hidden style="margin-top:8px"><input type="checkbox" id="replyReview"> Review again before Ready</label>
     </div>
     <div class="section"><h4>Activity</h4><ul class="timeline" id="sheetEvents"></ul></div>
   </div>
@@ -351,6 +364,12 @@ details > .stack, details > form { margin-top: 16px; }
       </div>
       <label class="field"><span>Title</span><input name="title" required autocomplete="off"></label>
       <label class="field"><span>Brief</span><textarea name="brief" rows="6" placeholder="Everything the worker needs. It sees only this."></textarea></label>
+      <div class="attach">
+        <input type="file" id="cardFile" multiple hidden>
+        <button type="button" class="btn tonal" id="cardAttach"><span class="icon">attach_file</span>Attach files</button>
+        <span class="hint">Images and files. You can also drop or paste them here.</span>
+        <div class="chips" id="cardFiles" hidden></div>
+      </div>
       <div class="actions" style="gap:24px">
         <label class="switch"><input type="checkbox" name="review"> Agent review</label>
         <label class="switch"><input type="checkbox" name="worktree" checked> Own worktree</label>
@@ -514,6 +533,35 @@ async function act(fn, ok) {
   try { const r = await fn(); if (ok) snack(ok); await refresh(); return r; }
   catch (e) { snack(e.message, true); }
 }
+// ---- attachments ---------------------------------------------------------
+const MAX_FILE = 25 * 1024 * 1024;
+const kb = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const toBase64 = (file) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => no(new Error(`can't read ${file.name}`)); r.readAsDataURL(file); });
+/** Pending files for one form: chips under `list`, a button, drop and paste. */
+function attachPicker({ list, input, button, drop }) {
+  let items = [];
+  const draw = () => {
+    list.hidden = !items.length;
+    list.innerHTML = items.map((f, i) => `<span class="chip">${icon(f.type.startsWith("image/") ? "image" : "attach_file")}${esc(f.name)} · ${kb(f.size)}<button type="button" data-rm="${i}" aria-label="Remove ${esc(f.name)}">${icon("close")}</button></span>`).join("");
+  };
+  const add = (files) => {
+    for (const f of files) { if (f.size > MAX_FILE) snack(`${f.name} is over 25 MB`, true); else items.push(f); }
+    draw();
+  };
+  list.addEventListener("click", (e) => { const b = e.target.closest("[data-rm]"); if (b) { items.splice(Number(b.dataset.rm), 1); draw(); } });
+  button.addEventListener("click", () => input.click());
+  input.addEventListener("change", () => { add([...input.files]); input.value = ""; });
+  const hasFiles = (e) => e.dataTransfer?.types.includes("Files");
+  drop.addEventListener("dragover", (e) => { if (hasFiles(e)) { e.preventDefault(); drop.classList.add("dropping"); } });
+  drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("dropping"); });
+  drop.addEventListener("drop", (e) => { drop.classList.remove("dropping"); if (hasFiles(e)) { e.preventDefault(); add([...e.dataTransfer.files]); } });
+  drop.addEventListener("paste", (e) => { const files = [...(e.clipboardData?.files ?? [])]; if (files.length) { e.preventDefault(); add(files); } });
+  return {
+    clear() { items = []; draw(); },
+    get count() { return items.length; },
+    payload: () => Promise.all(items.map(async (f) => ({ name: f.name, data: await toBase64(f) }))),
+  };
+}
 let snackTimer;
 function snack(msg, err = false) {
   const t = $("#snackbar");
@@ -646,9 +694,14 @@ async function renderSheet() {
     </div>
     ${c.branch || c.cwd ? `<div class="section"><h4>Where</h4><div class="mono muted">${c.branch ? `${esc(c.branch)}<br>` : ""}${esc(c.cwd)}</div></div>` : ""}
     ${c.summary ? `<div class="section"><h4>Worker summary</h4><div class="prose md">${md(c.summary)}</div></div>` : ""}
-    <div class="section"><h4>Brief</h4><div class="prose md">${md(c.brief || "(empty, so the title is the task)")}</div></div>`;
+    <div class="section"><h4>Brief</h4><div class="prose md">${md(c.brief || "(empty, so the title is the task)")}</div></div>
+    ${c.attachments.length ? `<div class="section"><h4>Attachments</h4>${attachmentsHtml(c)}</div>` : ""}`;
   const events = c.events.slice().reverse().map((e) => `<li><time>${new Date(e.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time><div class="md">${md(e.text)}</div></li>`).join("");
-  $("#replyBox").hidden = !live;
+  const canReply = live || (c.lane === "ready" && Boolean(full.agent_status));
+  $("#replyBox").hidden = !canReply;
+  $("#replyHint").hidden = c.lane !== "ready";
+  $("#replyReviewBox").hidden = c.lane !== "ready";
+  $("#replyText").placeholder = c.lane === "ready" ? "Confirm, correct, or ask for more" : "Sent to the running agent";
   // Rewriting identical HTML still drops text selection and scroll, and refresh() runs every 2s.
   const key = head + body + events;
   if (key === sheetKey && openCard === c.id) return;
@@ -662,15 +715,28 @@ async function renderSheet() {
   $$("#sheetBody .role").forEach((el) => el.addEventListener("change", () =>
     act(() => api("PATCH", `/api/cards/${c.id}`, { [el.dataset.role]: readRole(el) }), `${ROLES[el.dataset.role][0]} updated`)));
 }
+const attachUrl = (c, a) => `/api/cards/${c.id}/attachments/${encodeURIComponent(a.name)}`;
+const isImage = (a) => /\.(png|jpe?g|gif|webp)$/i.test(a.name);
+function attachmentsHtml(c) {
+  const images = c.attachments.filter(isImage), others = c.attachments.filter((a) => !isImage(a));
+  return `${images.length ? `<div class="thumbs">${images.map((a) => `<a class="thumb" href="${attachUrl(c, a)}" target="_blank" rel="noopener" title="${esc(a.name)}"><img src="${attachUrl(c, a)}" alt="${esc(a.name)}" loading="lazy"></a>`).join("")}</div>` : ""}
+    ${others.length ? `<div class="chips" style="margin-top:8px">${others.map((a) => `<a class="chip" href="${attachUrl(c, a)}" download>${icon("attach_file")}${esc(a.name)} · ${kb(a.size)}</a>`).join("")}</div>` : ""}`;
+}
 let sheetKey = "";
-function openSheet(id) { openCard = id; sheetKey = ""; $("#replyText").value = ""; $("#sheet").classList.add("open"); $("#scrim").classList.add("open"); renderSheet(); }
+function openSheet(id) { openCard = id; sheetKey = ""; $("#replyText").value = ""; $("#replyReview").checked = false; replyFiles.clear(); $("#sheet").classList.add("open"); $("#scrim").classList.add("open"); renderSheet(); }
 function closeSheet() { openCard = null; $("#sheet").classList.remove("open"); $("#scrim").classList.remove("open"); }
 $("#sheetClose").onclick = closeSheet;
 $("#scrim").onclick = closeSheet;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("dialog[open]")) closeSheet(); });
+const replyFiles = attachPicker({ list: $("#replyFiles"), input: $("#replyFile"), button: $("#replyAttach"), drop: $("#sheet") });
 const sendReply = () => {
   const text = $("#replyText").value.trim();
-  if (text) act(async () => { await api("POST", `/api/cards/${openCard}/reply`, { text }); $("#replyText").value = ""; }, "Sent to the agent");
+  if (!text && !replyFiles.count) return;
+  act(async () => {
+    const fromReady = !$("#replyReviewBox").hidden;
+    await api("POST", `/api/cards/${openCard}/reply`, { text, attachments: await replyFiles.payload(), ...(fromReady ? { review: $("#replyReview").checked } : {}) });
+    $("#replyText").value = ""; $("#replyReview").checked = false; replyFiles.clear(); sheetKey = "";
+  }, "Sent to the agent");
 };
 $("#replySend").onclick = sendReply;
 $("#replyText").addEventListener("keydown", (e) => { if (e.key === "Enter") sendReply(); });
@@ -703,10 +769,11 @@ $("#orchSend").onclick = sendOrch;
 $("#orchText").addEventListener("keydown", (e) => { if (e.key === "Enter") sendOrch(); });
 
 // ---- new card ------------------------------------------------------------
+const cardFiles = attachPicker({ list: $("#cardFiles"), input: $("#cardFile"), button: $("#cardAttach"), drop: $("#cardDlg") });
 $("#newCardBtn").onclick = () => {
   if (!S.projects.length) { snack("Add a project first", true); openProjects(); return; }
   const f = $("#cardForm");
-  f.reset();
+  f.reset(); cardFiles.clear();
   f.project_id.innerHTML = S.projects.map((p) => `<option value="${p.id}" ${String(p.id) === filter ? "selected" : ""}>${esc(p.name)}</option>`).join("");
   const sync = () => {
     const p = projectOf(Number(f.project_id.value));
@@ -721,9 +788,9 @@ $("#newCardBtn").onclick = () => {
 $("#cardDlg").addEventListener("close", () => {
   if ($("#cardDlg").returnValue !== "ok") return;
   const f = $("#cardForm");
-  act(() => api("POST", "/api/cards", {
+  act(async () => api("POST", "/api/cards", {
     project_id: Number(f.project_id.value), title: f.title.value, brief: f.brief.value, lane: f.lane.value,
-    review: f.review.checked, worktree: f.worktree.checked,
+    review: f.review.checked, worktree: f.worktree.checked, attachments: await cardFiles.payload(),
     worker: readRole($('#cardRoles [data-role="worker"]')), reviewer: readRole($('#cardRoles [data-role="reviewer"]')),
   }), "Card created");
 });

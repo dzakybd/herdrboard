@@ -34,6 +34,8 @@ Your environment has `HB_ROLE` (`worker`, `reviewer` or `orchestrator`), plus `H
 
 Always end a worker turn with `hb done`, and a reviewer turn with `hb review`. Otherwise the card is flagged "stopped without reporting".
 
+After `hb done` the human can still reply with a follow-up (attached files arrive as absolute paths in the message). Do the work, then run `hb done` again. To offer a next step instead of acting on your own, run `hb ask "<offer>"`. Files for a new card: `hb card add "<title>" --attach <file>`.
+
 ## Putting work on the board
 
 ```bash

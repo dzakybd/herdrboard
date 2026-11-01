@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename } from "node:path";
+import { attachmentPath, listAttachments, removeAttachments, saveAttachments } from "./attachments.ts";
 import { finishCleanup } from "./cleanup.ts";
 import { LANES, Store, type Lane } from "./db.ts";
 import { gate, loadToken } from "./auth.ts";
@@ -16,6 +17,7 @@ export const HOME = process.env.HB_HOME ?? `${homedir()}/.herdrboard`;
 export const PORT = Number(process.env.HB_PORT ?? 7420);
 const HOST = process.env.HB_HOST ?? "0.0.0.0";
 const TICK_MS = 3000;
+const DRAIN_MS = 60_000;
 
 const PROJECT_FIELDS = ["name", "base", "review", "orchestrator", "worker", "reviewer"];
 const CARD_FIELDS = ["title", "brief", "review", "worktree", "worker", "reviewer"];
@@ -112,10 +114,24 @@ export function serve(): void {
         worktree: body.worktree === undefined ? 1 : Number(Boolean(body.worktree)),
         ...roles({ worker: body.worker ?? null, reviewer: body.reviewer ?? null }),
       });
+      // Before startQueued: the worker's brief lists the files it finds.
+      try {
+        saveAttachments(HOME, c.id, body.attachments);
+      } catch (e) {
+        store.deleteCard(c.id);
+        removeAttachments(HOME, c.id);
+        throw e;
+      }
       pipe.startQueued();
       return c;
     },
-    "GET /api/cards/:id": (_r, p) => ({ ...card(p.id!), events: store.events(Number(p.id)) }),
+    "POST /api/cards/:id/attachments": (_r, p, body) => {
+      const c = card(p.id!);
+      if (c.lane === "done") throw new Error("the card is done");
+      saveAttachments(HOME, c.id, body.attachments);
+      return listAttachments(HOME, c.id);
+    },
+    "GET /api/cards/:id": (_r, p) => ({ ...card(p.id!), events: store.events(Number(p.id)), attachments: listAttachments(HOME, Number(p.id)) }),
     "PATCH /api/cards/:id": (_r, p, body) => {
       const c = card(p.id!);
       const patch = roles(pick(body, CARD_FIELDS));
@@ -125,6 +141,7 @@ export function serve(): void {
     "DELETE /api/cards/:id": (_r, p) => {
       if (card(p.id!).workspace_id) throw new Error("finish the card first (it still has a herdr workspace)");
       store.deleteCard(Number(p.id));
+      removeAttachments(HOME, Number(p.id));
     },
     "POST /api/cards/:id/move": async (_r, p, body) => {
       if (!LANES.includes(body.lane)) throw new Error(`unknown lane '${body.lane}'`);
@@ -135,7 +152,7 @@ export function serve(): void {
     "POST /api/cards/:id/done": (_r, p, body) => pipe.done(Number(p.id), String(body.summary ?? "")),
     "POST /api/cards/:id/review": (_r, p, body) => pipe.review(Number(p.id), Boolean(body.approve), String(body.notes ?? "")),
     "POST /api/cards/:id/ask": (_r, p, body) => pipe.ask(Number(p.id), String(body.question)),
-    "POST /api/cards/:id/reply": (_r, p, body) => pipe.reply(Number(p.id), String(body.text)),
+    "POST /api/cards/:id/reply": (_r, p, body) => pipe.reply(Number(p.id), String(body.text ?? ""), body.attachments, body.review === undefined ? undefined : Boolean(body.review)),
     "POST /api/cards/:id/focus": (_r, p) => pipe.focus(Number(p.id)),
 
     "POST /api/automations": (_r, _p, body) => {
@@ -207,13 +224,32 @@ export function serve(): void {
     });
   }
 
+  // Uploaded files are untrusted: only raster images show inline, the rest download, and none can run script.
+  const INLINE = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+  routes["/api/cards/:id/attachments/:name"] = {
+    GET: guarded((req) => {
+      const path = attachmentPath(HOME, Number(req.params.id), req.params.name!);
+      if (!path) return Response.json({ error: "no such attachment" }, { status: 404 });
+      const file = Bun.file(path);
+      const inline = INLINE.has(file.type.split(";")[0]!);
+      return new Response(file, {
+        headers: {
+          "content-type": inline ? file.type : "application/octet-stream",
+          "content-disposition": `${inline ? "inline" : "attachment"}; filename="${req.params.name}"`,
+          "content-security-policy": "sandbox",
+          "x-content-type-options": "nosniff",
+        },
+      });
+    }),
+  };
+
   const page = Bun.file(new URL("../web/index.html", import.meta.url).pathname);
   const docs = Bun.file(new URL("../web/docs.html", import.meta.url).pathname);
   const script = (relative: string) => {
     const file = Bun.file(new URL(relative, import.meta.url).pathname);
     return guarded(() => new Response(file, { headers: { "content-type": "text/javascript" } }));
   };
-  Bun.serve({
+  const server = Bun.serve({
     hostname: HOST,
     port: PORT,
     routes: { ...routes, "/": guarded(() => new Response(page, { headers: { "content-type": "text/html" } })),
@@ -227,7 +263,30 @@ export function serve(): void {
 
   pipe.recover();
   const tick = () => pipe.tick().catch((e) => console.error(`tick: ${e.message}`));
-  setInterval(tick, TICK_MS);
+  // Attachments of long-finished cards would pile up; a done card keeps them for 30 days.
+  const prune = () => {
+    const old = Date.now() - 30 * 86_400_000;
+    for (const c of store.cards()) if (c.lane === "done" && c.updated_at < old) removeAttachments(HOME, c.id);
+  };
+  prune();
+  setInterval(prune, 86_400_000);
+  const ticker = setInterval(tick, TICK_MS);
   tick();
+
+  // A restart (update, launchd, systemd) must not cut a launch in half: agents run in
+  // herdr and carry on by themselves, but a worktree being set up would be orphaned.
+  // Finish the requests in flight, let launches land, then exit. `hb` retries meanwhile.
+  let stopping = false;
+  const shutdown = async (signal: string) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`${signal}: draining, agents keep running`);
+    clearInterval(ticker);
+    await server.stop();
+    const clean = await pipe.drain(DRAIN_MS);
+    console.log(clean ? "drained, exiting" : `launches still running after ${DRAIN_MS / 1000}s, exiting anyway`);
+    process.exit(0);
+  };
+  for (const signal of ["SIGTERM", "SIGINT"] as const) process.on(signal, () => void shutdown(signal));
   console.log(`herdrboard on http://${HOST}:${PORT} (state in ${HOME}); other devices: \`hb url\``);
 }

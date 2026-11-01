@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { saveAttachments } from "../src/attachments.ts";
 import { Store, type Card } from "../src/db.ts";
 import type { AgentStatus, Herdr } from "../src/herdr.ts";
 import { Pipeline } from "../src/pipeline.ts";
@@ -72,6 +73,7 @@ let store: Store;
 let herdr: FakeHerdr;
 let p: Pipeline;
 let projectId: number;
+let home: string;
 
 beforeEach(() => {
   store = new Store(":memory:", () => ({
@@ -88,7 +90,7 @@ beforeEach(() => {
     maxRounds: 2,
   }));
   herdr = new FakeHerdr();
-  p = new Pipeline(store, herdr, { home: mkdtempSync(`${tmpdir()}/hb-`), url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500 });
+  p = new Pipeline(store, herdr, { home: (home = mkdtempSync(`${tmpdir()}/hb-`)), url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500 });
   projectId = store.addProject({ name: "demo", path: "/repo/demo", base: "main" }).id;
 });
 
@@ -253,6 +255,96 @@ describe("agent state sync", () => {
     expect(store.card(card.id)!.lane).toBe("needs_you");
     await p.reply(card.id, "blue");
     expect(herdr.prompts.at(-1)).toEqual({ target: card.worker_pane!, text: "blue" });
+  });
+});
+
+describe("attachments and replies in Ready", () => {
+  const b64 = (t: string) => Buffer.from(t).toString("base64");
+
+  test("attached files are listed in the worker's brief", async () => {
+    const card = add();
+    saveAttachments(home, card.id, [{ name: "my shot (1).png", data: b64("png") }]);
+    await p.tick();
+    await p.settle();
+    const brief = readFileSync(`${home}/cards/${card.id}/worker.md`, "utf8");
+    expect(brief).toContain("## Attachments");
+    expect(brief).toContain(`${home}/cards/${card.id}/attachments/my_shot_1_.png`);
+  });
+
+  test("a ready card still takes a reply, with files, and goes back to working", async () => {
+    const card = await started({ review: 0 });
+    p.done(card.id, "done");
+    expect(store.card(card.id)!.lane).toBe("ready");
+    await p.reply(card.id, "yes, also do X", [{ name: "spec.pdf", data: b64("pdf") }]);
+    const sent = herdr.prompts.at(-1)!;
+    expect(sent.target).toBe(card.worker_pane!);
+    expect(sent.text).toContain("yes, also do X");
+    expect(sent.text).toContain(`${home}/cards/${card.id}/attachments/spec.pdf`);
+    expect(store.card(card.id)!.lane).toBe("working");
+    expect(p.done(card.id, "did X").lane).toBe("ready");
+  });
+
+  test("hb ask from a ready card waits for you, and the answer puts it back to working", async () => {
+    const card = await started({ review: 0 });
+    p.done(card.id, "done");
+    p.ask(card.id, "Want me to also clean up?");
+    expect(store.card(card.id)).toMatchObject({ lane: "needs_you", resume_lane: "working" });
+    herdr.status.set(card.worker_pane!, "idle");
+    await p.sync();
+    await p.reply(card.id, "yes");
+    herdr.status.set(card.worker_pane!, "working");
+    await p.sync();
+    expect(store.card(card.id)!.lane).toBe("working");
+  });
+
+  test("a follow-up from ready can skip or repeat the review", async () => {
+    const card = await started({ review: 1 });
+    p.done(card.id, "done");
+    await p.review(card.id, true); // reviewer approves, card is ready
+    await p.reply(card.id, "also rename it", undefined, false);
+    expect(store.card(card.id)).toMatchObject({ lane: "working", review: 0 });
+    expect(p.done(card.id, "renamed").lane).toBe("ready"); // no second reviewer round
+    await p.reply(card.id, "one more, check it", undefined, true);
+    expect(p.done(card.id, "again").lane).toBe("review");
+  });
+
+  test("a reply from ready waits when every worker slot is busy", async () => {
+    const card = await started({ review: 0 });
+    p.done(card.id, "done");
+    add({ lane: "working" });
+    add({ lane: "working" });
+    await expect(p.reply(card.id, "more")).rejects.toThrow("worker slots are busy");
+    expect(store.card(card.id)!.lane).toBe("ready");
+  });
+
+  test("an empty reply is refused", async () => {
+    const card = await started();
+    await expect(p.reply(card.id, "  ")).rejects.toThrow("write a message or attach a file");
+  });
+});
+
+describe("drain", () => {
+  test("waits for a launch in flight, then starts nothing new", async () => {
+    const run = herdr.run.bind(herdr);
+    herdr.run = async (pane, command) => {
+      await Bun.sleep(40);
+      return run(pane, command);
+    };
+    const card = add();
+    p.startQueued(); // launch begins, not finished
+    expect(await p.drain(2000)).toBe(true);
+    expect(store.card(card.id)!.worker_pane).not.toBeNull();
+    expect(herdr.prompts).toHaveLength(1); // the brief was delivered before drain returned
+    const later = add({ title: "later" });
+    await p.tick();
+    expect(store.card(later.id)!.lane).toBe("todo");
+  });
+
+  test("gives up after the deadline instead of hanging", async () => {
+    herdr.run = () => new Promise(() => {});
+    add();
+    p.startQueued();
+    expect(await p.drain(60)).toBe(false);
   });
 });
 

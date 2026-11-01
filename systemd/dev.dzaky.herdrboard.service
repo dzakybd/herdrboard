@@ -8,6 +8,7 @@ Environment="PATH=__HOME__/.local/bin:__HOME__/.bun/bin:/usr/local/bin:/usr/bin:
 Environment="HOME=__HOME__"
 Restart=on-failure
 RestartSec=3
+TimeoutStopSec=90
 StandardOutput=append:__HOME__/.herdrboard/serve.log
 StandardError=append:__HOME__/.herdrboard/serve.log
 

@@ -16,6 +16,7 @@
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <key>ExitTimeOut</key><integer>90</integer>
   <key>StandardOutPath</key><string>__HOME__/.herdrboard/serve.log</string>
   <key>StandardErrorPath</key><string>__HOME__/.herdrboard/serve.log</string>
 </dict>

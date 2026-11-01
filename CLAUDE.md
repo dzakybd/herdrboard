@@ -16,7 +16,7 @@
 - Lint: none
 - Typecheck: `bunx tsc --noEmit`
 - Run locally: `HB_HOME=/tmp/hb HB_PORT=7421 bun src/cli.ts serve` (keeps the real service and state untouched)
-- Restart the service after code changes: `launchctl kickstart -k gui/$(id -u)/dev.dzaky.herdrboard`
+- Restart the service after code changes: `hb restart` (drains in-flight launches first; running agents are not touched). Plain `launchctl kickstart -k` does the same.
 
 ### Layout
 - Source lives in: `src/` (server, pipeline state machine, herdr CLI wrapper, db, scheduler, profiles, briefs, cli) and `web/index.html`
@@ -40,6 +40,7 @@
 
 ## Project Learnings
 
+- A restart only endangers a launch in progress (worktree + agent being set up). `serve` drains on SIGTERM and `hb` retries ECONNREFUSED inside agents ($HB_CARD/$HB_ROLE); keep both when touching startup/shutdown.
 - herdr reports a freshly typed `cc2` as `idle` before Claude Code has drawn its UI. Wait for two settled polls, and handle the folder-trust prompt (`blocked`) first.
 - After `hb ask`, the agent is still `working` while it finishes that turn. A needs_you card may only return to its lane after the agent has settled once (`worked` flag).
 - `herdr worktree remove` also closes the workspace and its agents. `herdr worktree create` creates a primary workspace for the repo root if none exists.
