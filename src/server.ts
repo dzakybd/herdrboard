@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename } from "node:path";
-import { LANES, Store, type Lane, type Settings } from "./db.ts";
+import { LANES, Store, type Lane } from "./db.ts";
 import { gate, loadToken } from "./auth.ts";
 import { expandHome, listDirs } from "./fs.ts";
 import { cliHerdr } from "./herdr.ts";
-import { Pipeline } from "./pipeline.ts";
-import { defaultSettings, EFFORTS, MODES, storeRole, validateRole } from "./profiles.ts";
+import { Pipeline, slug } from "./pipeline.ts";
+import { defaultSettings, EFFORTS, MODES, storeRole, validateSettings } from "./profiles.ts";
 import { nextDue, parseTrigger } from "./scheduler.ts";
+import { applyImport, exportBundle, planImport, type Inspect } from "./transfer.ts";
 
 export const HOME = process.env.HB_HOME ?? `${homedir()}/.herdrboard`;
 export const PORT = Number(process.env.HB_PORT ?? 7420);
@@ -16,7 +17,7 @@ const TICK_MS = 3000;
 
 const PROJECT_FIELDS = ["name", "base", "review", "orchestrator", "worker", "reviewer"];
 const CARD_FIELDS = ["title", "brief", "review", "worktree", "worker", "reviewer"];
-const AUTOMATION_FIELDS = ["name", "project_id", "trigger", "title", "brief", "worktree", "review", "worker", "reviewer", "enabled"];
+const AUTOMATION_FIELDS = ["project_id", "trigger", "title", "brief", "worktree", "review", "worker", "reviewer", "enabled"];
 
 function pick(body: Record<string, unknown>, fields: string[]): Record<string, any> {
   return Object.fromEntries(Object.entries(body).filter(([k]) => fields.includes(k)));
@@ -27,18 +28,20 @@ function git(path: string, ...args: string[]): string | null {
   return r.exitCode === 0 ? r.stdout.toString().trim() : null;
 }
 
-function validateSettings(s: Settings): Settings {
-  if (!Array.isArray(s.profiles) || !s.profiles.length) throw new Error("at least one profile is required");
-  for (const p of s.profiles) if (!p.name?.trim() || !p.command?.trim()) throw new Error("each profile needs a name and a command");
-  const roles = {} as Settings["roles"];
-  for (const role of ["orchestrator", "worker", "reviewer"] as const) {
-    const cfg = validateRole(s.roles?.[role] ?? {}, s.profiles);
-    if (!cfg.profile) throw new Error(`${role} needs a profile`);
-    roles[role] = cfg as Settings["roles"][typeof role];
-  }
-  if (!(s.maxWorkers >= 1) || !(s.maxRounds >= 0)) throw new Error("maxWorkers must be ≥ 1 and maxRounds ≥ 0");
-  return { profiles: s.profiles, roles, maxWorkers: Number(s.maxWorkers), maxRounds: Number(s.maxRounds) };
-}
+/** Can this path be a project here? Keeps the export's base branch when the repository has it. */
+const inspectPath: Inspect = (raw, base) => {
+  const path = expandHome(raw);
+  if (!existsSync(path)) return { path, base, problem: `no such folder: ${path}` };
+  const real = realpathSync(path);
+  const top = git(real, "rev-parse", "--show-toplevel");
+  if (top && top !== real) return { path: real, base, problem: `use the repository root: ${top}` };
+  if (!top) return base ? { path: real, base, problem: `${real} is not a git repository, but the project uses base ${base}` } : { path: real, base };
+  if (!base) return { path: real, base, note: "this is a git repository here, but it stays a folder project" };
+  if (git(real, "rev-parse", "--verify", "--quiet", `${base}^{commit}`)) return { path: real, base };
+  const current = git(real, "symbolic-ref", "--short", "HEAD");
+  if (!current || !git(real, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")) return { path: real, base, problem: `branch ${base} not found` };
+  return { path: real, base: current, note: `branch ${base} not found, using ${current}` };
+};
 
 const ROLE_FIELDS = ["orchestrator", "worker", "reviewer"];
 
@@ -88,16 +91,27 @@ export function serve(): void {
       return store.settings();
     },
 
+    "GET /api/export": () => exportBundle(store),
+    "POST /api/import/check": (_r, _p, body) => planImport(store, body.bundle, body, inspectPath),
+    "POST /api/import": (_r, _p, body) => {
+      const plan = planImport(store, body.bundle, body, inspectPath);
+      applyImport(store, body.bundle, plan);
+      return plan;
+    },
+
     "POST /api/projects": (_r, _p, body) => {
       const raw = expandHome(String(body.path ?? ""));
       if (!existsSync(raw)) throw new Error(`no such folder: ${raw}`);
       const path = realpathSync(raw);
       const top = git(path, "rev-parse", "--show-toplevel");
-      if (top !== path) throw new Error(top ? `use the repository root: ${top}` : `${path} is not a git repository`);
-      const base = body.base || git(path, "symbolic-ref", "--short", "HEAD") || "main";
+      if (top && top !== path) throw new Error(`use the repository root: ${top}`);
+      const base = top ? body.base || git(path, "symbolic-ref", "--short", "HEAD") || "main" : "";
       return store.addProject({ name: body.name || basename(path), path, base, review: body.review ?? 1 });
     },
-    "PATCH /api/projects/:id": (_r, p, body) => store.updateProject(Number(p.id), roles(pick(body, PROJECT_FIELDS))),
+    "PATCH /api/projects/:id": (_r, p, body) => {
+      if (body.base !== undefined && !String(body.base).trim()) throw new Error("base branch is required");
+      return store.updateProject(Number(p.id), roles(pick(body, PROJECT_FIELDS)));
+    },
     "DELETE /api/projects/:id": (_r, p) => store.deleteProject(Number(p.id)),
     "POST /api/projects/:id/orchestrator": (_r, p) => pipe.startOrchestrator(Number(p.id)),
     "POST /api/projects/:id/orchestrator/say": (_r, p, body) => pipe.sayToOrchestrator(Number(p.id), String(body.text)),
@@ -145,12 +159,16 @@ export function serve(): void {
       parseTrigger(String(body.trigger));
       const project = body.project_id ? store.project(Number(body.project_id)) : store.projectByName(String(body.project));
       if (!project) throw new Error(`unknown project '${body.project ?? body.project_id}'`);
-      if (!body.name || !body.title) throw new Error("name and title are required");
+      const title = String(body.title ?? "").trim();
+      if (!title) throw new Error("title is required");
+      const base = slug(title);
+      let name = base;
+      for (let n = 2; store.automationByName(name); n++) name = `${base}-${n}`;
       return store.addAutomation({
-        name: String(body.name),
+        name,
         project_id: project.id,
         trigger: String(body.trigger),
-        title: String(body.title),
+        title,
         brief: String(body.brief ?? ""),
         worktree: body.worktree === undefined ? 1 : Number(Boolean(body.worktree)),
         review: body.review === undefined ? project.review : Number(Boolean(body.review)),
@@ -158,15 +176,26 @@ export function serve(): void {
       });
     },
     "PATCH /api/automations/:id": (_r, p, body) => {
-      if (body.trigger !== undefined) parseTrigger(String(body.trigger));
-      return store.updateAutomation(Number(p.id), roles(pick(body, AUTOMATION_FIELDS)));
+      const a = store.automation(Number(p.id));
+      if (!a) throw new Error(`no automation #${p.id}`);
+      const patch = roles(pick(body, AUTOMATION_FIELDS));
+      if (patch.title !== undefined) {
+        patch.title = String(patch.title).trim();
+        if (!patch.title) throw new Error("title is required");
+      }
+      if (patch.trigger !== undefined) {
+        patch.trigger = String(patch.trigger);
+        // Count the new schedule from now: otherwise a slot already past today looks missed and fires.
+        if (!Bun.deepEquals(parseTrigger(patch.trigger), parseTrigger(a.trigger))) patch.last_run_at = Date.now();
+      }
+      return store.updateAutomation(a.id, patch);
     },
     "DELETE /api/automations/:id": (_r, p) => store.deleteAutomation(Number(p.id)),
-    "POST /api/automations/:id/run": (_r, p) => {
+    "POST /api/automations/:id/run": async (_r, p) => {
       const a = store.automation(Number(p.id)) ?? store.automationByName(p.id!);
       if (!a) throw new Error(`no automation '${p.id}'`);
-      const c = pipe.fire(a);
-      if (!c) throw new Error(`skipped: automation '${a.name}' still has an open card`);
+      const c = await pipe.fire(a);
+      if (!c) throw new Error(`skipped: automation '${a.name}' still has a card in progress`);
       pipe.startQueued();
       return c;
     },
@@ -191,11 +220,18 @@ export function serve(): void {
 
   const page = Bun.file(new URL("../web/index.html", import.meta.url).pathname);
   const docs = Bun.file(new URL("../web/docs.html", import.meta.url).pathname);
+  const script = (relative: string) => {
+    const file = Bun.file(new URL(relative, import.meta.url).pathname);
+    return guarded(() => new Response(file, { headers: { "content-type": "text/javascript" } }));
+  };
   Bun.serve({
     hostname: HOST,
     port: PORT,
     routes: { ...routes, "/": guarded(() => new Response(page, { headers: { "content-type": "text/html" } })),
       "/docs": guarded(() => new Response(docs, { headers: { "content-type": "text/html" } })),
+      "/theme.js": script("../web/theme.js"),
+      "/vendor/marked.js": script("../node_modules/marked/lib/marked.umd.js"),
+      "/vendor/purify.js": script("../node_modules/dompurify/dist/purify.min.js"),
     },
     fetch: () => Response.json({ error: "not found" }, { status: 404 }),
   });

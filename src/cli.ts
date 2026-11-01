@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 
 const URL_BASE = process.env.HB_URL ?? `http://127.0.0.1:${process.env.HB_PORT ?? 7420}`;
@@ -8,6 +8,10 @@ const HELP = `hb: herdrboard CLI
 
   hb serve                                   run the board (web UI + tick loop)
   hb url                                     link for your phone/other devices (carries the access token)
+
+  hb export [file]                           save projects, automations, card history and settings as JSON
+  hb import <file> [--dry-run] [--path PROJECT=PATH]... [--skip PROJECT]...
+                                             check the file against this machine, then import it
 
   hb project add <path> [--name N] [--base B] [--no-review]
   hb project list
@@ -25,7 +29,7 @@ const HELP = `hb: herdrboard CLI
   hb ask "<question>"                        agent: ask the human, card goes to Needs you
 
   hb automation list
-  hb automation add --name N --trigger "every 30m" --title T [--brief B] [--project P] [--no-worktree] [--no-review]
+  hb automation add --title T --trigger "every 30m" [--brief B] [--project P] [--no-worktree] [--no-review]
                     [--worker PROFILE] [--model M] [--effort E] [--mode MODE]
   hb automation run <name>
 
@@ -99,6 +103,43 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
     (await import("./server.ts")).serve();
     break;
   }
+  case "export": {
+    const bundle = await call("GET", "/api/export");
+    const text = `${JSON.stringify(bundle, null, 2)}\n`;
+    if (sub) writeFileSync(sub, text);
+    else process.stdout.write(text);
+    console.error(`exported ${bundle.projects.length} project(s), ${bundle.automations.length} automation(s), ${bundle.cards.length} card(s)`);
+    if (bundle.in_progress_left_out) console.error(`left out ${bundle.in_progress_left_out} in-progress card(s): finish them first if you want them in the export`);
+    break;
+  }
+  case "import": {
+    const { values, positionals } = args({ "dry-run": { type: "boolean" }, path: { type: "string", multiple: true }, skip: { type: "string", multiple: true } }, process.argv.slice(3));
+    if (!positionals[0]) die("usage: hb import <file> [--dry-run] [--path PROJECT=PATH]... [--skip PROJECT]...");
+    let bundle: unknown;
+    try {
+      bundle = JSON.parse(readFileSync(positionals[0], "utf8"));
+    } catch (e) {
+      die(`can't read ${positionals[0]}: ${(e as Error).message}`);
+    }
+    const paths: Record<string, string> = {};
+    for (const pair of (values.path ?? []) as string[]) {
+      const at = pair.indexOf("=");
+      if (at < 1) die(`--path needs PROJECT=PATH, got '${pair}'`);
+      paths[pair.slice(0, at)] = pair.slice(at + 1);
+    }
+    const body = { bundle, paths, skip: values.skip };
+    const plan = await call("POST", "/api/import/check", body);
+    for (const p of plan.projects) console.log(`${p.problem ? "problem" : p.action.padEnd(7)}  ${p.name}  ${p.path}${p.note ? `  (${p.note})` : ""}`);
+    console.log(`automations: ${plan.automations.add} new, ${plan.automations.existing} already here, ${plan.automations.skipped} skipped`);
+    console.log(`cards: ${plan.cards.add} new, ${plan.cards.existing} already here, ${plan.cards.skipped} skipped`);
+    for (const w of plan.warnings) console.log(`warning: ${w}`);
+    for (const e of plan.errors) console.error(`error: ${e}`);
+    if (!plan.ok) die("nothing imported: fix these with --path or --skip");
+    if (values["dry-run"]) break;
+    await call("POST", "/api/import", body);
+    console.log("imported");
+    break;
+  }
   case "url": {
     const { HOME, PORT } = await import("./server.ts");
     const { loadToken } = await import("./auth.ts");
@@ -109,11 +150,11 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
   case "project add": {
     const { values, positionals } = args({ name: { type: "string" }, base: { type: "string" }, "no-review": { type: "boolean" } });
     const p = await call("POST", "/api/projects", { path: positionals[0] ?? process.cwd(), name: values.name, base: values.base, review: values["no-review"] ? 0 : 1 });
-    console.log(`project ${p.name} → ${p.path} (base ${p.base})`);
+    console.log(`project ${p.name} → ${p.path} (${p.base ? `base ${p.base}` : "folder"})`);
     break;
   }
   case "project list": {
-    for (const p of (await call("GET", "/api/state")).projects) console.log(`${p.name}  ${p.path}  base=${p.base}  review=${p.review ? "on" : "off"}`);
+    for (const p of (await call("GET", "/api/state")).projects) console.log(`${p.name}  ${p.path}  ${p.base ? `base=${p.base}` : "folder"}  review=${p.review ? "on" : "off"}`);
     break;
   }
   case "card add": {
@@ -196,7 +237,6 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
   }
   case "automation add": {
     const { values } = args({
-      name: { type: "string" },
       trigger: { type: "string" },
       title: { type: "string" },
       brief: { type: "string" },

@@ -276,16 +276,53 @@ describe("moves and finish", () => {
   });
 });
 
+describe("folder projects", () => {
+  test("a card runs in the folder and Finish closes its tab", async () => {
+    const folder = store.addProject({ name: "many", path: "/repos", base: "" });
+    const home = mkdtempSync(`${tmpdir()}/hb-`);
+    const q = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500 });
+    const card = add({ project_id: folder.id, review: 0 });
+    await q.tick();
+    await q.settle();
+    const running = store.card(card.id)!;
+    expect(running).toMatchObject({ worktree: 0, branch: null, cwd: "/repos" });
+    expect(readFileSync(`${home}/cards/${card.id}/worker.md`, "utf8")).toContain(`/repos/.hb-worktrees/${card.id}/<repo>`);
+    await q.finish(card.id);
+    expect(herdr.removed).toEqual([]);
+    expect(herdr.closed).toContain(running.tab_id!);
+  });
+});
+
 describe("automations", () => {
-  test("fires a todo card, skips while it is open", () => {
-    const a = store.addAutomation({ name: "sweep", project_id: projectId, trigger: "every 1m", title: "Sweep", brief: "b", worktree: 0, review: 0, worker: null, reviewer: null });
+  const sweep = () => store.addAutomation({ name: "sweep", project_id: projectId, trigger: "every 1m", title: "Sweep", brief: "b", worktree: 0, review: 0, worker: null, reviewer: null });
+
+  test("fires a todo card, skips while it is in progress", async () => {
+    const a = sweep();
     const t0 = a.created_at + 60_000;
-    p.runAutomations(t0);
+    await p.runAutomations(t0);
     expect(store.cardsIn("todo").map((c) => c.title)).toEqual(["Sweep"]);
-    p.runAutomations(t0 + 60_000);
+    await p.runAutomations(t0 + 60_000);
     expect(store.cards()).toHaveLength(1);
-    store.updateCard(store.cards()[0]!.id, { lane: "done" });
-    p.runAutomations(t0 + 120_000);
-    expect(store.cards()).toHaveLength(2);
+  });
+
+  test("the next fire finishes a Ready card and replaces it", async () => {
+    const a = sweep();
+    const first = (await p.fire(a))!;
+    store.updateCard(first.id, { lane: "ready" });
+    const second = (await p.fire(a))!;
+    expect(store.card(first.id)!.lane).toBe("done");
+    expect(second.lane).toBe("todo");
+  });
+
+  test("a Ready card that can't be finished stays, and the fire is skipped", async () => {
+    const a = sweep();
+    const first = (await p.fire(a))!;
+    store.updateCard(first.id, { lane: "ready", worktree: 1, workspace_id: "w9" });
+    herdr.worktreeRemove = async () => {
+      throw new Error("uncommitted changes");
+    };
+    expect(await p.fire(a)).toBeNull();
+    expect(store.card(first.id)!.lane).toBe("ready");
+    expect(store.cards()).toHaveLength(1);
   });
 });

@@ -8,7 +8,7 @@ export interface Project {
   id: number;
   name: string;
   path: string;
-  base: string;
+  base: string; // empty: a folder of repositories, not a repository itself
   review: number; // default for new cards
   orchestrator: string | null; // RoleConfig JSON overrides; null = settings default
   worker: string | null;
@@ -211,6 +211,17 @@ export class Store {
       .get(c.project_id, c.title, c.brief, c.lane, c.review, c.worktree, c.worker ?? null, c.reviewer ?? null, c.automation_id ?? null, now, now) as Card;
     this.log(row.id, `created in ${row.lane}`);
     return row;
+  }
+
+  /** Restores a card from an export, keeping its timestamps and activity. */
+  importCard(c: Pick<Card, "project_id" | "title" | "brief" | "lane" | "review" | "worktree" | "worker" | "reviewer" | "automation_id" | "branch" | "summary" | "created_at" | "updated_at"> & { events: Pick<CardEvent, "at" | "text">[] }): void {
+    const row = this.db
+      .query(
+        `INSERT INTO cards (project_id, title, brief, lane, review, worktree, worker, reviewer, automation_id, branch, summary, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      )
+      .get(c.project_id, c.title, c.brief, c.lane, c.review, c.worktree, c.worker, c.reviewer, c.automation_id, c.branch, c.summary, c.created_at, c.updated_at) as { id: number };
+    for (const e of c.events) this.db.query("INSERT INTO events (card_id, at, text) VALUES (?, ?, ?)").run(row.id, e.at, e.text);
   }
 
   updateCard(id: number, patch: Partial<Card>): Card {

@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,400;8..144,500;8..144,600&family=Roboto+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..24,400,0..1,0&display=block">
+<script src="/theme.js"></script>
 <style>
 :root {
   --primary: #0b57d0; --on-primary: #fff; --primary-container: #d3e3fd; --on-primary-container: #041e49;
@@ -21,7 +22,7 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --primary: #a8c7fa; --on-primary: #062e6f; --primary-container: #0842a0; --on-primary-container: #d3e3fd;
     --secondary-container: #3b4858; --on-secondary-container: #dde3ea;
     --error: #f2b8b5; --error-container: #8c1d18; --on-error-container: #f9dedc;
@@ -31,6 +32,16 @@
     --sc-lowest: #0e0e0f; --sc-low: #1b1b1c; --sc: #1f1f20; --sc-high: #282829; --sc-highest: #333335;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --primary: #a8c7fa; --on-primary: #062e6f; --primary-container: #0842a0; --on-primary-container: #d3e3fd;
+  --secondary-container: #3b4858; --on-secondary-container: #dde3ea;
+  --error: #f2b8b5; --error-container: #8c1d18; --on-error-container: #f9dedc;
+  --ok: #6dd58c; --ok-container: #0f5223;
+  --surface: #131314; --on-surface: #e3e3e3; --on-surface-variant: #c4c7c5;
+  --outline: #8e918f; --outline-variant: #444746;
+  --sc-lowest: #0e0e0f; --sc-low: #1b1b1c; --sc: #1f1f20; --sc-high: #282829; --sc-highest: #333335;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 80px; }
@@ -97,6 +108,7 @@ main { min-width: 0; }
 <header class="appbar">
   <div class="logo"><span class="icon">view_kanban</span></div>
   <b>herdrboard docs</b>
+  <button class="btn" id="themeBtn"><span class="icon">brightness_auto</span></button>
   <a class="btn" href="/"><span class="icon">arrow_back</span>Board</a>
 </header>
 
@@ -139,7 +151,7 @@ flowchart LR
           <pre>git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 ./scripts/install.sh</pre></li>
         <li><b>Open the board</b> at <a href="http://127.0.0.1:7420">http://127.0.0.1:7420</a>. On your phone, run <code>hb url</code> and open that link once (see <a href="#phone">Phone access</a>).</li>
-        <li><b>Add a project.</b> Open <span class="icon">folder_open</span> Projects, press <b>Browse</b>, click through to your repository (git repos are marked), then <b>Add project</b>.</li>
+        <li><b>Add a project.</b> Open <span class="icon">folder_open</span> Projects, press <b>Browse</b>, click through to your repository (git repos are marked), then <b>Add project</b>. A folder of several repositories works too: workers pick the repositories and make their own worktrees under <code>.hb-worktrees/&lt;card&gt;/</code>, which Finish leaves in place.</li>
         <li><b>Check the agents.</b> In <span class="icon">settings</span> Settings, pick the profile, model, effort and mode for the orchestrator, worker and reviewer. Your <code>cc1</code>…<code>cc4</code>, <code>ccd</code> functions are already listed.</li>
         <li><b>Create a card</b> with <b>New card</b>. Write the brief as if for a new teammate: the worker sees only the brief. Leave it in Todo and a worker starts within a few seconds.</li>
         <li><b>Watch it</b> on the board, or press <b>Open in herdr</b> on the card to jump to the live session in Ovis.</li>
@@ -238,14 +250,15 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
 
     <section id="automations">
       <h2>Automations</h2>
-      <p>An automation creates a card on a schedule. Open <span class="icon">schedule</span> Automations and give it a name, a trigger, the card title and brief, and optionally its own agent settings.</p>
+      <p>An automation creates a card on a schedule. Open <span class="icon">schedule</span> Automations and give it a title, a schedule, a brief, and optionally its own agent settings. The title becomes the card title. Use <span class="icon">edit</span> to change an automation later. A changed schedule counts from that moment.</p>
       <div class="table-wrap"><table>
-        <tr><th>Trigger</th><th>Fires</th></tr>
-        <tr><td><code>every 30m</code> · <code>every 2h</code> · <code>every 1d</code></td><td>at that interval</td></tr>
-        <tr><td><code>daily 09:00</code></td><td>every day at 09:00 local time</td></tr>
-        <tr><td><code>weekly mon 09:00</code></td><td>every Monday at 09:00</td></tr>
+        <tr><th>Schedule</th><th>CLI trigger</th><th>Fires</th></tr>
+        <tr><td>Every day</td><td><code>daily 09:00</code></td><td>every day at 09:00 local time</td></tr>
+        <tr><td>Every weekday</td><td><code>weekdays 09:00</code></td><td>Monday to Friday at 09:00</td></tr>
+        <tr><td>Every week</td><td><code>weekly mon 09:00</code></td><td>every Monday at 09:00</td></tr>
+        <tr><td>On an interval</td><td><code>every 30m</code> · <code>every 2h</code> · <code>every 1d</code></td><td>at that interval</td></tr>
       </table></div>
-      <p>If the Mac was asleep at the scheduled time, it fires once on wake. If the automation's previous card is still open (not Ready or Done), the fire is skipped, never queued. <b>Run</b> fires it now.</p>
+      <p>If the Mac was asleep at the scheduled time, it fires once on wake. An automation has one card at a time. If its previous card is in Ready, the next fire finishes it for you (the worktree is removed, the branch is kept), so read the result before then. If that card is still in progress, or can't be finished because of uncommitted work, the fire is skipped, never queued, and the reason is in the card's activity. <b>Run</b> fires it now.</p>
     </section>
 
     <section id="needs-you">
@@ -277,7 +290,7 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
       <p>Everything in the UI is also in <code>hb</code>. Agents use the same commands, and <code>$HB_CARD</code> / <code>$HB_PROJECT</code> fill in the ids for them.</p>
       <div class="table-wrap"><table>
         <tr><th>Command</th><th>Does</th></tr>
-        <tr><td><code>hb project add &lt;path&gt;</code></td><td>Register a repository</td></tr>
+        <tr><td><code>hb project add &lt;path&gt;</code></td><td>Register a repository or a folder of repositories</td></tr>
         <tr><td><code>hb card add "&lt;title&gt;" --brief "…"</code></td><td>Create a card in Todo. Add <code>--backlog</code>, <code>--no-review</code>, <code>--no-worktree</code>, <code>--worker cc2</code>, <code>--model</code>, <code>--effort</code>, <code>--mode</code></td></tr>
         <tr><td><code>hb card list [--lane needs_you]</code></td><td>List open cards</td></tr>
         <tr><td><code>hb card show &lt;id&gt;</code></td><td>Brief, summary, branch and activity log</td></tr>
@@ -287,6 +300,8 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
         <tr><td><code>hb ask "…"</code></td><td>Any agent: ask you a question</td></tr>
         <tr><td><code>hb orch start</code> / <code>hb orch say "…"</code></td><td>Start or message the orchestrator</td></tr>
         <tr><td><code>hb automation add|list|run</code></td><td>Manage automations</td></tr>
+        <tr><td><code>hb export [file]</code></td><td>Save projects, automations, card history and settings as JSON (also in Settings)</td></tr>
+        <tr><td><code>hb import &lt;file&gt; [--dry-run] [--path P=PATH] [--skip P]</code></td><td>Check an export against this machine, then import it, all or nothing (also in Settings)</td></tr>
         <tr><td><code>hb url</code></td><td>Link for your phone</td></tr>
         <tr><td><code>hb serve</code></td><td>Run the board in the foreground (launchd normally does this)</td></tr>
       </table></div>

@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "Kanban + automation for coding agents running in herdr",
   "type": "module",
-  "bin": { "hb": "src/cli.ts" },
+  "bin": {
+    "hb": "src/cli.ts"
+  },
   "scripts": {
     "serve": "bun src/cli.ts serve",
     "test": "bun test",
@@ -12,5 +14,9 @@
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.2"
   }
 }

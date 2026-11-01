@@ -45,7 +45,7 @@ export class Pipeline {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      this.runAutomations(now);
+      await this.runAutomations(now);
       await this.sync();
       this.startQueued();
     } finally {
@@ -76,6 +76,7 @@ export class Pipeline {
     let card = this.store.card(id)!;
     const project = this.store.project(card.project_id)!;
     const role = resolveRole(this.store.settings(), "worker", project, card);
+    if (!project.base) card = this.store.updateCard(id, { worktree: 0 });
     if (card.worktree) {
       const branch = `hb/${card.id}-${slug(card.title)}`;
       const wt = await this.herdr.worktreeCreate(project.path, branch, project.base);
@@ -317,24 +318,36 @@ export class Pipeline {
 
   // ---- automations -------------------------------------------------------
 
-  runAutomations(now: number): void {
+  async runAutomations(now: number): Promise<void> {
     for (const a of this.store.automations()) {
       if (!a.enabled) continue;
       try {
-        if (isDue(parseTrigger(a.trigger), Math.max(a.last_run_at, a.created_at), now)) this.fire(a, now);
+        if (isDue(parseTrigger(a.trigger), Math.max(a.last_run_at, a.created_at), now)) await this.fire(a, now);
       } catch (e) {
         console.error(`automation ${a.name}: ${(e as Error).message}`);
       }
     }
   }
 
-  /** Creates the automation's card, unless its previous card is still open (skip, never queue). */
-  fire(a: Automation, now = Date.now()): Card | null {
+  /**
+   * Creates the automation's card. The previous card is finished first if it
+   * sits in Ready; if it is still in progress or can't be finished, the fire is
+   * skipped, never queued.
+   */
+  async fire(a: Automation, now = Date.now()): Promise<Card | null> {
     this.store.updateAutomation(a.id, { last_run_at: now });
-    const open = this.store.cards().find((c) => c.automation_id === a.id && c.lane !== "ready" && c.lane !== "done");
-    if (open) {
+    const open = this.store.cards().find((c) => c.automation_id === a.id && c.lane !== "done");
+    if (open && open.lane !== "ready") {
       this.store.log(open.id, `automation ${a.name} fired while this card is open; skipped`);
       return null;
+    }
+    if (open) {
+      try {
+        await this.finish(open.id);
+      } catch (e) {
+        this.store.log(open.id, `automation ${a.name} could not finish this card, so it skipped: ${(e as Error).message}`);
+        return null;
+      }
     }
     return this.store.addCard({
       project_id: a.project_id,

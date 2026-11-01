@@ -32,6 +32,16 @@ describe("isDue", () => {
     expect(isDue(parseTrigger("weekly wed 09:00"), created, now)).toBe(true);
     expect(isDue(parseTrigger("weekly fri 09:00"), created, now)).toBe(false);
   });
+  test("weekdays: skips the weekend", () => {
+    const t = parseTrigger("weekdays 09:00");
+    expect(t).toEqual({ type: "weekdays", h: 9, m: 0 });
+    const friEvening = new Date(2026, 9, 30, 18, 0).getTime();
+    const sunNoon = new Date(2026, 10, 1, 12, 0).getTime();
+    const monNoon = new Date(2026, 10, 2, 12, 0).getTime();
+    expect(isDue(t, friEvening, sunNoon)).toBe(false);
+    expect(isDue(t, friEvening, monNoon)).toBe(true);
+    expect(nextDue(t, friEvening, sunNoon)).toBe(new Date(2026, 10, 2, 9, 0).getTime());
+  });
   test("nextDue gives the next slot", () => {
     expect(nextDue(parseTrigger("daily 14:30"), 0, now)).toBe(new Date(2026, 9, 28, 14, 30).getTime());
     expect(nextDue(parseTrigger("daily 09:00"), 0, now)).toBe(new Date(2026, 9, 29, 9, 0).getTime());

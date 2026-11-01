@@ -5,7 +5,7 @@ A kanban board and automation layer for coding agents that run in [herdr](https:
 - **Card pipeline.** A card in Todo gets its own git worktree (a herdr workspace) and a worker agent. When the worker runs `hb done`, a reviewer agent opens in a split pane. If the reviewer asks for changes, the feedback goes back to the worker, up to 2 rounds; after that the card goes to *Needs you*. You can turn review off per card or per project.
 - **Profiles per role.** Orchestrator, worker, and reviewer each use a profile (a command typed into the pane, such as your `cc1`/`cc2`/`ccd` zsh functions, picked up from `~/.zshrc` on first run) plus an optional **model**, **effort** (`low` … `max`), and **permission mode** (default `bypassPermissions`). They are appended as `--model`, `--effort` and `--permission-mode`. Set defaults in Settings and override them per project, per card, or per automation; each field falls back to the next level on its own.
 - **Orchestrator.** One agent per project, running in the main checkout. Tell it what you want (in herdr or from the board) and it turns that into cards with `hb card add`.
-- **Automations.** `every 30m`, `daily 09:00`, or `weekly mon 09:00`. Each fire creates a card in Todo. If the automation's previous card is still open, the fire is skipped.
+- **Automations.** `every 30m`, `daily 09:00`, `weekdays 09:00`, or `weekly mon 09:00`. Each fire creates a card in Todo. A previous card in Ready is finished automatically; one still in progress makes the fire skip.
 - **Needs you.** A card lands here when the agent is waiting on a permission prompt, runs `hb ask`, stops without reporting, or exits. Reply from the card, or answer in the agent's terminal. Either way, the card goes back to its lane once the agent is working again.
 
 ```
@@ -34,7 +34,9 @@ This is plain HTTP, so only open it on a network you trust, or put it behind Tai
 
 Add a project with **Projects → Browse** (a folder picker that marks git repositories), or `hb project add <repo>`,, check the profiles under **Settings**, then create a card.
 
-Adding a repository means you trust it. Claude Code asks "do you trust this folder?" for every new worktree, and herdrboard answers yes. It answers that prompt and no other.
+A project can also be a folder that holds several repositories. Cards there run in that folder, and the worker picks the repositories and makes its own worktrees under `.hb-worktrees/<card>/`. Finish does not remove those worktrees.
+
+Adding a project means you trust it. Claude Code asks "do you trust this folder?" for every new worktree, and herdrboard answers yes. It answers that prompt and no other.
 
 ## CLI
 
@@ -53,6 +55,14 @@ hb card add "Title" --brief "…"          # orchestrator
 In a mode other than bypass, Claude Code asks before running `hb done` and similar commands; the card shows in *Needs you* until you approve in herdr.
 
 Agents are started with `HB_CARD`, `HB_ROLE`, `HB_URL` (and `HB_PROJECT` for the orchestrator) in their environment, so these commands need no ids.
+
+## Move to another machine
+
+`hb export board.json` (or **Settings → Export**) saves projects, automations, card history and settings, without the access token. Cards still in progress are left out, because their agents and worktrees can't move.
+
+On the new machine, install herdrboard and clone your repositories, then run `hb import board.json --dry-run` (or **Settings → Import**). It checks each path, git root and base branch, plus triggers and profiles, and changes nothing. Fix what it reports with `--path PROJECT=/new/path` or `--skip PROJECT`, then run it without `--dry-run`. Import is all or nothing, and running it again adds nothing new.
+
+Pending cards arrive in Backlog, so no agent starts. Automations keep their on/off state and count their schedule from the import. Projects and automations already on the machine stay as they are, and settings are only replaced on an empty board; otherwise only missing profiles are added. A profile is a command typed into a shell, so read the warnings for any new ones. Stop the old board afterwards, or both will run the automations.
 
 ## Agent skill
 

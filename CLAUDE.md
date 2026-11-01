@@ -4,7 +4,7 @@
 
 ### Stack
 - Language and version: TypeScript on Bun 1.4
-- Framework(s): none (Bun.serve, bun:sqlite, vanilla HTML/JS)
+- Framework(s): none (Bun.serve, bun:sqlite, vanilla HTML/JS); marked and DOMPurify are served from node_modules at `/vendor/`, so the UI needs no CDN for them
 - Package manager: bun
 - Runtime / deployment target: local macOS, launchd agent `dev.dzaky.herdrboard` on 127.0.0.1:7420
 

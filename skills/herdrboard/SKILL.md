@@ -27,7 +27,7 @@ Your environment has `HB_ROLE` (`worker`, `reviewer` or `orchestrator`), plus `H
 
 | Role | When | Command |
 | --- | --- | --- |
-| worker | task finished and committed | `hb done --summary "<one line>"` |
+| worker | task finished and committed | `hb done --summary "<full result, Markdown is rendered>"` |
 | reviewer | work is correct | `hb review --approve` |
 | reviewer | work needs fixes | `hb review --changes "<numbered, concrete fixes>"` |
 | any | you need a human decision | `hb ask "<question>"`, then wait for the reply |
@@ -37,8 +37,8 @@ Always end a worker turn with `hb done`, and a reviewer turn with `hb review`. O
 ## Putting work on the board
 
 ```bash
-hb project list                                  # registered repositories
-hb project add <repo-root>                       # only when the user asks; it means they trust the repo
+hb project list                                  # registered repositories and folders
+hb project add <repo-root-or-folder>             # only when the user asks; it means they trust it
 hb card add "<title>" --brief "<full brief>"     # goes to Todo and starts right away
 hb card add "<title>" --brief-file brief.md --backlog   # parked; `hb card move <id> todo` starts it
 ```
@@ -67,11 +67,11 @@ Cards in `needs_you` are waiting for the human. Report them to the user. Do not 
 hb orch start [project]            # start or focus the project's orchestrator agent in herdr
 hb orch say [project] "<request>"  # send it a message
 hb automation list
-hb automation add --name <n> --trigger "every 30m" --title "<t>" --brief "<b>" [--no-worktree] [--no-review]
-hb automation run <name>           # fire now
+hb automation add --title "<t>" --trigger "every 30m" --brief "<b>" [--no-worktree] [--no-review]
+hb automation run <name>           # fire now; the name is generated from the title, see `hb automation list`
 ```
 
-Trigger forms: `every 30m|2h|1d`, `daily HH:MM`, `weekly mon HH:MM`. Each fire creates a Todo card. It is skipped while the automation's previous card is still open.
+Trigger forms: `every 30m|2h|1d`, `daily HH:MM`, `weekdays HH:MM`, `weekly mon HH:MM`. Each fire creates a Todo card. If the automation's previous card is in Ready, the fire finishes it first (its worktree is removed, its branch kept). If that card is still in progress, the fire is skipped.
 
 ## Phone access
 

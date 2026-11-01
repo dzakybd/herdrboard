@@ -48,6 +48,19 @@ export function storeRole(input: unknown, profiles: Profile[]): string | null {
   return Object.keys(cfg).length ? JSON.stringify(cfg) : null;
 }
 
+export function validateSettings(s: Settings): Settings {
+  if (!Array.isArray(s.profiles) || !s.profiles.length) throw new Error("at least one profile is required");
+  for (const p of s.profiles) if (!p.name?.trim() || !p.command?.trim()) throw new Error("each profile needs a name and a command");
+  const roles = {} as Settings["roles"];
+  for (const role of ["orchestrator", "worker", "reviewer"] as const) {
+    const cfg = validateRole(s.roles?.[role] ?? {}, s.profiles);
+    if (!cfg.profile) throw new Error(`${role} needs a profile`);
+    roles[role] = cfg as Settings["roles"][typeof role];
+  }
+  if (!(s.maxWorkers >= 1) || !(s.maxRounds >= 0)) throw new Error("maxWorkers must be ≥ 1 and maxRounds ≥ 0");
+  return { profiles: s.profiles, roles, maxWorkers: Number(s.maxWorkers), maxRounds: Number(s.maxRounds) };
+}
+
 export interface ResolvedRole {
   profile: Profile;
   model?: string;
