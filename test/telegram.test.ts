@@ -345,3 +345,14 @@ test("a reopened card comes back to its topic, reopened", async () => {
   expect(calls.map((c) => c.method)).toEqual(["createForumTopic", "sendMessage", "closeForumTopic", "reopenForumTopic", "sendMessage"]);
   expect(calls.at(-1)!.params.message_thread_id).toBe(101);
 });
+
+test("a deleted card's topic is deleted too", async () => {
+  await linked();
+  tg.notify({ kind: "started", card });
+  tg.notify({ kind: "deleted", card });
+  tg.notify({ kind: "deleted", card });
+  await tg.flush();
+  expect(calls.map((c) => c.method)).toEqual(["createForumTopic", "sendMessage", "deleteForumTopic"]);
+  expect(calls.at(-1)!.params).toEqual({ chat_id: CHAT, message_thread_id: 101 });
+  expect(JSON.parse(readFileSync(`${home}/telegram.json`, "utf8")).topics).toEqual({});
+});

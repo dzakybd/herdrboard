@@ -26,6 +26,7 @@ const HELP = `hb: herdrboard CLI
   hb card list [--project P] [--lane L]
   hb card show <id>
   hb card move <id> <backlog|todo|done>
+  hb card delete <id>                        a card without a workspace (finish it first); also deletes its Telegram topic
 
   hb done --summary "<what you did>"         worker: task finished   (card from $HB_CARD or --card)
   hb review --approve | --changes "<notes>"  reviewer: verdict
@@ -282,6 +283,12 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
     if (c.summary) console.log(`\nsummary: ${c.summary}`);
     console.log("\nlog:");
     for (const e of c.events) console.log(`  ${new Date(e.at).toLocaleString()}  ${e.text}`);
+    break;
+  }
+  case "card delete": {
+    if (!rest[0]) die("usage: hb card delete <id>");
+    await call("DELETE", `/api/cards/${rest[0]}`);
+    console.log(`#${rest[0]} deleted`);
     break;
   }
   case "card move": {

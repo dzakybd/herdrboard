@@ -158,7 +158,11 @@ export function serve(): void {
       if (body.base !== undefined && !String(body.base).trim()) throw new Error("base branch is required");
       return store.updateProject(Number(p.id), roles(pick(body, PROJECT_FIELDS)));
     },
-    "DELETE /api/projects/:id": (_r, p) => store.deleteProject(Number(p.id)),
+    "DELETE /api/projects/:id": (_r, p) => {
+      const gone = store.cards().filter((c) => c.project_id === Number(p.id));
+      store.deleteProject(Number(p.id));
+      for (const c of gone) telegram.notify({ kind: "deleted", card: c });
+    },
     "POST /api/projects/:id/orchestrator": (_r, p) => pipe.startOrchestrator(Number(p.id)),
     "POST /api/projects/:id/orchestrator/say": (_r, p, body) => pipe.sayToOrchestrator(Number(p.id), String(body.text)),
 
@@ -177,9 +181,11 @@ export function serve(): void {
       return store.updateCard(c.id, patch);
     },
     "DELETE /api/cards/:id": (_r, p) => {
-      if (card(p.id!).workspace_id) throw new Error("finish the card first (it still has a herdr workspace)");
-      store.deleteCard(Number(p.id));
-      removeAttachments(HOME, Number(p.id));
+      const c = card(p.id!);
+      if (c.workspace_id) throw new Error("finish the card first (it still has a herdr workspace)");
+      store.deleteCard(c.id);
+      removeAttachments(HOME, c.id);
+      telegram.notify({ kind: "deleted", card: c });
     },
     "POST /api/cards/:id/move": async (_r, p, body) => {
       if (!LANES.includes(body.lane)) throw new Error(`unknown lane '${body.lane}'`);

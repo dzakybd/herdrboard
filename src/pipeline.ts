@@ -22,7 +22,7 @@ export interface PipelineOptions {
   notify?: (event: BoardEvent) => void;
 }
 
-export type BoardEvent = { kind: "started" | "needs_you" | "ready" | "done"; card: Card };
+export type BoardEvent = { kind: "started" | "needs_you" | "ready" | "done" | "deleted"; card: Card };
 
 export class Pipeline {
   private launching = new Set<number>();

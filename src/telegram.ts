@@ -222,6 +222,13 @@ export class Telegram {
       if (thread) await api("closeForumTopic", { chat_id: state.chat_id, message_thread_id: thread });
       return;
     }
+    if (kind === "deleted") {
+      if (!thread) return;
+      delete state.topics[card.id];
+      this.save();
+      await api("deleteForumTopic", { chat_id: state.chat_id, message_thread_id: thread });
+      return;
+    }
     // A reopened automation card comes back to the topic Finish closed.
     if (kind === "started" && thread) await api("reopenForumTopic", { chat_id: state.chat_id, message_thread_id: thread }).catch(() => {});
     const html = message(kind, card);
@@ -265,7 +272,7 @@ function cut(text: string): string {
   return chars.length > MAX_TEXT ? `${chars.slice(0, MAX_TEXT - 1).join("")}…` : text;
 }
 
-function message(kind: Exclude<BoardEvent["kind"], "done">, card: Card): string {
+function message(kind: Exclude<BoardEvent["kind"], "done" | "deleted">, card: Card): string {
   if (kind === "started") {
     // The brief is collapsed: a long one would otherwise fill the topic.
     return fit(card.brief.trim() || "(no brief)", (b) => `▶️ <b>Started</b>\n<blockquote expandable>${md(b, { quoted: true })}</blockquote>\n<i>/status for progress. Reply here to talk to the agent.</i>`);
