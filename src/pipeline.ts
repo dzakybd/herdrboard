@@ -4,6 +4,7 @@ import { feedbackPrompt, orchestratorBrief, reviewerBrief, workerBrief } from ".
 import type { Cleanup } from "./cleanup.ts";
 import type { Automation, Card, Lane, Store } from "./db.ts";
 import type { AgentStatus, Herdr } from "./herdr.ts";
+import { explainStop, type Stop } from "./diagnose.ts";
 import { describeRole, launchCommand, resolveRole } from "./profiles.ts";
 import { isDue, parseTrigger } from "./scheduler.ts";
 
@@ -179,13 +180,24 @@ export class Pipeline {
       if (this.launching.has(card.id)) continue;
       const pane = this.activePane(card);
       if (!pane) continue;
-      this.syncCard(card, agents.get(pane));
+      await this.syncCard(card, pane, agents.get(pane));
     }
   }
 
-  private syncCard(card: Card, status: AgentStatus | undefined): void {
+  /** Reads the agent's screen to say why it stopped (usage limit, API error, its last words). */
+  private async why(card: Card, pane: string, stop: Stop): Promise<string> {
+    const review = (card.lane === "needs_you" ? card.resume_lane : card.lane) === "review";
+    let profile = "the agent";
+    try {
+      profile = resolveRole(this.store.settings(), review ? "reviewer" : "worker", this.store.project(card.project_id)!, card).profile.name;
+    } catch {}
+    const screen = await this.herdr.read(pane).catch(() => "");
+    return explainStop(stop, screen, { profile, report: review ? "hb review" : "hb done" });
+  }
+
+  private async syncCard(card: Card, pane: string, status: AgentStatus | undefined): Promise<void> {
     if (status === undefined) {
-      this.needsYou(card, "The agent exited.", null);
+      this.needsYou(card, await this.why(card, pane, "exited"), null);
     } else if (card.lane === "needs_you") {
       // `worked` here means "settled since entering needs_you": working before
       // that is the tail of the turn that asked, not the agent being answered.
@@ -196,13 +208,12 @@ export class Pipeline {
         this.store.updateCard(card.id, { worked: 1 });
       }
     } else if (status === "blocked") {
-      this.needsYou(card, "The agent is waiting for a permission or an answer in herdr.", card.lane);
+      this.needsYou(card, await this.why(card, pane, "blocked"), card.lane);
       this.store.updateCard(card.id, { worked: 1 });
     } else if (status === "working") {
       if (!card.worked) this.store.updateCard(card.id, { worked: 1 });
     } else if ((status === "idle" || status === "done") && card.worked) {
-      const cmd = card.lane === "review" ? "hb review" : "hb done";
-      this.needsYou(card, `The agent stopped without running \`${cmd}\`.`, card.lane);
+      this.needsYou(card, await this.why(card, pane, "stopped"), card.lane);
     }
   }
 

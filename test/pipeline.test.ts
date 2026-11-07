@@ -228,11 +228,24 @@ describe("agent state sync", () => {
     expect(store.card(card.id)!.attention).toContain("hb done");
   });
 
+  test("a stop says why, from the agent's screen", async () => {
+    const card = await started();
+    await p.sync();
+    herdr.status.set(card.worker_pane!, "working");
+    await p.sync();
+    herdr.status.set(card.worker_pane!, "idle");
+    herdr.screen.set(card.worker_pane!, "❯ Read brief\n  ⎿  You've hit your 5-hour limit · resets 12:10pm (Asia/Jakarta)\n⏺ Usage limit reached");
+    await p.sync();
+    const stuck = store.card(card.id)!;
+    expect(stuck.lane).toBe("needs_you");
+    expect(stuck.attention).toStartWith("cc2 hit its 5-hour usage limit (resets 12:10pm).");
+  });
+
   test("agent exit needs you", async () => {
     const card = await started();
     herdr.status.delete(card.worker_pane!);
     await p.sync();
-    expect(store.card(card.id)!.attention).toBe("The agent exited.");
+    expect(store.card(card.id)!.attention).toBe("The agent (cc2) exited and its pane is gone.");
   });
 
   test("hb ask waits out the asking turn, returns once the agent is answered", async () => {
