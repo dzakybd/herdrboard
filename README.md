@@ -80,6 +80,8 @@ Commands work anywhere in the group (they show in Telegram's `/` menu once linke
 
 In a card's topic, any other text, including Claude Code commands such as `/compact`, goes to the card's agent.
 
+When a run reports reviewed PRs (`hb done --pr owner/repo#123=approve|changes`), its Ready message gets an **Approve** and a **Changes** button per PR, the agent's recommendation starred. A tap asks to confirm; **Yes** submits the verdict on GitHub as you, with `gh`. A run that ends with `hb done --quiet` (nothing to report) sends no message.
+
 Only the person who sent `/link` is listened to. The token is in `~/.herdrboard/telegram.json` (mode 600); `hb telegram off` forgets it. Questions and summaries go through Telegram's servers. Files sent in Telegram are not passed on yet; attach them on the board.
 
 ## CLI
@@ -87,7 +89,7 @@ Only the person who sent `/link` is listened to. The token is in `~/.herdrboard/
 `hb help` lists everything. Agents use:
 
 ```sh
-hb done --summary "what I did"           # worker
+hb done --summary "what I did"           # worker; --quiet: no Telegram message; --pr owner/repo#1=approve: verdict buttons
 hb review --approve                      # reviewer
 hb review --changes "1. … 2. …"
 hb ask "Which provider should I use?"    # any agent

@@ -29,6 +29,8 @@ const HELP = `hb: herdrboard CLI
   hb card delete <id>                        a card without a workspace (finish it first); also deletes its Telegram topic
 
   hb done --summary "<what you did>"         worker: task finished   (card from $HB_CARD or --card)
+          [--quiet]                         nothing to report: no Telegram message
+          [--pr owner/repo#123=approve|changes]...  PRs you reviewed; Telegram offers to submit the verdict
   hb review --approve | --changes "<notes>"  reviewer: verdict
   hb ask "<question>"                        agent: ask the human, card goes to Needs you
 
@@ -298,8 +300,8 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
     break;
   }
   case "done": {
-    const { values } = args({ summary: { type: "string" }, card: { type: "string" } }, [sub ?? "", ...rest].filter(Boolean));
-    console.log(line(await call("POST", `/api/cards/${cardId(values.card as string)}/done`, { summary: values.summary ?? "" })));
+    const { values } = args({ summary: { type: "string" }, card: { type: "string" }, quiet: { type: "boolean" }, pr: { type: "string", multiple: true } }, [sub ?? "", ...rest].filter(Boolean));
+    console.log(line(await call("POST", `/api/cards/${cardId(values.card as string)}/done`, { summary: values.summary ?? "", quiet: values.quiet, prs: values.pr })));
     break;
   }
   case "review": {

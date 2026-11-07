@@ -262,7 +262,7 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
         <tr><td>Every week</td><td><code>weekly mon 09:00</code></td><td>every Monday at 09:00</td></tr>
         <tr><td>On an interval</td><td><code>every 30m</code> · <code>every 2h</code> · <code>every 1d</code></td><td>at that interval</td></tr>
       </table></div>
-      <p>If the Mac was asleep at the scheduled time, it fires once on wake. An automation keeps one card and one agent. When that card is in Ready, the next fire sends the brief to the same agent again: same worktree, same branch, and it remembers earlier runs. Edits to the automation's brief apply from the next run. If the agent is gone, the card is finished (the worktree is removed, the branch is kept unless it has no commits) and then reopened with a fresh agent. The card keeps its number and its Telegram topic for good; a run on a worktree gets a new branch, <code>…-run2</code> and so on. If the agent is busy or every worker slot is taken, the run waits and starts as soon as it can. If the card is still in progress, or can't be finished because of uncommitted work, the fire is skipped, never queued. Either way the reason is in the card's activity. To start an automation over with a fresh agent, Finish its card: the next run reopens it. <b>Run</b> fires it now.</p>
+      <p>If the Mac was asleep at the scheduled time, it fires once on wake. An automation keeps one card and one agent. When that card is in Ready, the next fire sends the brief to the same agent again: same worktree, same branch, and it remembers earlier runs. Edits to the automation's brief apply from the next run. If the agent is gone, the card is finished (the worktree is removed, the branch is kept unless it has no commits) and then reopened with a fresh agent. The card keeps its number and its Telegram topic for good; a run on a worktree gets a new branch, <code>…-run2</code> and so on. If the agent is busy or every worker slot is taken, the run waits and starts as soon as it can. If the card is still in progress, or can't be finished because of uncommitted work, the fire is skipped, never queued. Either way the reason is in the card's activity. To start an automation over with a fresh agent, Finish its card: the next run reopens it. An agent over a week old is replaced this way on its own, so its conversation doesn't grow forever. <b>Run</b> fires it now.</p>
       <p>When the open card is waiting on you (Needs you, or Ready but stuck), the automation row shows <b>Blocked since</b> with the reason in red. Click it to open that card. Re-enabling a paused automation counts the schedule from that moment, so a slot missed while paused does not fire. The <span class="icon">history</span> button lists the automation's last 50 runs with their summaries, including runs of cards that already left the board.</p>
     </section>
 
@@ -316,6 +316,7 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
         <tr><td><code>/run &lt;automation&gt;</code></td><td>Fire an automation now</td></tr>
       </table></div>
       <p>In a card's topic, any other text, including Claude Code commands such as <code>/compact</code>, goes to the card's agent.</p>
+      <p>When a run reports reviewed PRs (<code>hb done --pr owner/repo#123=approve</code> or <code>=changes</code>), its Ready message gets an <b>Approve</b> and a <b>Changes</b> button per PR, the agent's recommendation starred. A tap asks to confirm; <b>Yes</b> submits the verdict on GitHub as you, through <code>gh</code>. A run that ends with <code>hb done --quiet</code> (nothing to report) sends no message.</p>
       <div class="note warn"><span class="icon">lock</span><p>Only the person who sent <code>/link</code> is listened to. Questions and summaries pass through Telegram's servers. <code>hb telegram off</code> forgets the bot.</p></div>
     </section>
 
@@ -330,7 +331,7 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
         <tr><td><code>hb card list [--lane needs_you]</code></td><td>List open cards</td></tr>
         <tr><td><code>hb card show &lt;id&gt;</code></td><td>Brief, summary, branch and activity log</td></tr>
         <tr><td><code>hb card move &lt;id&gt; todo|backlog|done</code></td><td>Start, park or finish a card</td></tr>
-        <tr><td><code>hb done --summary "…"</code></td><td>Worker: the task is finished</td></tr>
+        <tr><td><code>hb done --summary "…"</code></td><td>Worker: the task is finished. <code>--quiet</code>: nothing to report, no Telegram message. <code>--pr owner/repo#123=approve</code>: offer that verdict as a Telegram button.</td></tr>
         <tr><td><code>hb review --approve</code> / <code>--changes "…"</code></td><td>Reviewer: the verdict</td></tr>
         <tr><td><code>hb ask "…"</code></td><td>Any agent: ask you a question</td></tr>
         <tr><td><code>hb orch start</code> / <code>hb orch say "…"</code></td><td>Start or message the orchestrator</td></tr>

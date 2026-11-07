@@ -1,8 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { attachmentDir, listAttachments, saveAttachments } from "./attachments.ts";
 import { feedbackPrompt, orchestratorBrief, reviewerBrief, workerBrief } from "./briefs.ts";
 import type { Cleanup } from "./cleanup.ts";
-import type { Automation, Card, Lane, Store } from "./db.ts";
+import { cardVerdicts, type Automation, type Card, type Lane, type PullVerdict, type Store } from "./db.ts";
 import type { AgentStatus, Herdr } from "./herdr.ts";
 import { explainStop, type Stop } from "./diagnose.ts";
 import { describeRole, launchCommand, resolveRole } from "./profiles.ts";
@@ -10,6 +11,7 @@ import { isDue, parseTrigger } from "./scheduler.ts";
 
 const TRUST_PROMPT = "Yes, I trust this folder";
 const LIVE: Lane[] = ["working", "review"];
+const FRESH_AGENT_MS = 7 * 86_400_000;
 
 export interface PipelineOptions {
   home: string; // brief files go to <home>/cards/<id>/
@@ -20,6 +22,8 @@ export interface PipelineOptions {
   cleanup?: Cleanup;
   /** Told when a card starts (or reruns), waits on the human, reaches Ready, or is finished (Telegram). Must not throw. */
   notify?: (event: BoardEvent) => void;
+  /** Submits an approval or a change request on GitHub as the user (gh). */
+  submitReview?: (repo: string, number: number, verdict: PullVerdict["verdict"]) => Promise<void>;
 }
 
 export type BoardEvent = { kind: "started" | "needs_you" | "ready" | "done" | "deleted"; card: Card };
@@ -28,6 +32,8 @@ export class Pipeline {
   private launching = new Set<number>();
   /** Automations inside fire(): a second Run click or a tick must not prompt the same agent twice. */
   private firing = new Set<number>();
+  /** Verdicts being submitted: a second tap while gh runs must not post twice. */
+  private submitting = new Set<string>();
   /** pane id → agent status from the last sync, for the UI. */
   statuses = new Map<string, AgentStatus>();
   private ticking = false;
@@ -232,9 +238,12 @@ export class Pipeline {
 
   // ---- reports from agents (hb CLI) --------------------------------------
 
-  done(id: number, summary: string): Card {
+  /** `quiet`: nothing worth a notification (e.g. no PRs waiting). `prs`: verdicts the human can submit from Telegram. */
+  done(id: number, summary: string, opts: { quiet?: boolean; prs?: PullVerdict[] } = {}): Card {
     const card = this.expect(id, "working");
-    this.store.updateCard(id, { summary, attention: null, resume_lane: null });
+    // Reported PRs always get announced: their buttons live on the Ready message.
+    const prs = opts.prs?.length ? JSON.stringify({ key: randomBytes(3).toString("hex"), list: opts.prs }) : null;
+    this.store.updateCard(id, { summary, attention: null, resume_lane: null, quiet: Number(Boolean(opts.quiet) && !prs), prs });
     this.store.endRun(id, summary);
     this.store.log(id, `worker done: ${summary}`);
     if (!card.review) return this.toReady(id);
@@ -285,7 +294,7 @@ export class Pipeline {
   private toReady(id: number): Card {
     this.store.log(id, "ready");
     const card = this.store.updateCard(id, { lane: "ready", attention: null, resume_lane: null });
-    this.opts.notify?.({ kind: "ready", card });
+    if (!card.quiet) this.opts.notify?.({ kind: "ready", card });
     return card;
   }
 
@@ -431,7 +440,11 @@ export class Pipeline {
       return null;
     }
     const status = open?.worker_pane ? (await this.herdr.agents()).get(open.worker_pane) : undefined;
-    if (open && status) return this.rerun(a, open, now, status, previous);
+    // Its conversation only grows, so an agent older than a week is replaced by a fresh one.
+    // An agent mid-turn is never cut off: rerun() waits for it like for any other run.
+    const replace = open && (status === "idle" || status === "done") && now - this.agentStartedAt(open) > FRESH_AGENT_MS;
+    if (open && replace) this.store.log(open.id, "the agent is over a week old: finishing it so this run starts a fresh one");
+    if (open && status && !replace) return this.rerun(a, open, now, status, previous);
     if (open) {
       try {
         await this.finish(open.id);
@@ -457,6 +470,8 @@ export class Pipeline {
         attention: null,
         resume_lane: null,
         summary: null,
+        prs: null,
+        quiet: 0,
         round: 0,
         worked: 0,
         branch: null,
@@ -504,9 +519,38 @@ export class Pipeline {
     await this.herdr.prompt(card.worker_pane!, `Automation "${a.title}" is due again (run ${run}). Read ${brief} again and do this run, then report with \`hb done\` as before.`);
     this.store.addRun(a.id, card.id, now);
     this.store.log(card.id, `run ${run}: brief sent to the same agent`);
-    const working = this.store.updateCard(card.id, { lane: "working", attention: null, resume_lane: null, summary: null, worked: 0 });
+    const working = this.store.updateCard(card.id, { lane: "working", attention: null, resume_lane: null, summary: null, prs: null, quiet: 0, worked: 0 });
     this.opts.notify?.({ kind: "started", card: working });
     return working;
+  }
+
+  /** A verdict from a Telegram button: checked against the card's latest run, submitted once. */
+  async submitVerdict(cardId: number, key: string, index: number, verdict: PullVerdict["verdict"]): Promise<PullVerdict> {
+    const prs = cardVerdicts(this.store.card(cardId));
+    if (!prs || prs.key !== key) throw new Error("This button is from an earlier run of the card.");
+    const pr = prs.list[index];
+    if (!pr) throw new Error("That PR is not in the card's latest run.");
+    if (pr.submitted) throw new Error(`${pr.repo}#${pr.number} already got your ${pr.submitted === "approve" ? "approval" : "change request"}.`);
+    const slot = `${cardId}:${key}:${index}`;
+    if (this.submitting.has(slot)) throw new Error(`Already submitting ${pr.repo}#${pr.number}.`);
+    if (!this.opts.submitReview) throw new Error("Submitting reviews is not set up on this board.");
+    this.submitting.add(slot);
+    try {
+      await this.opts.submitReview(pr.repo, pr.number, verdict);
+    } finally {
+      this.submitting.delete(slot);
+    }
+    const now = cardVerdicts(this.store.card(cardId));
+    if (now?.key === key && now.list[index]) {
+      now.list[index]!.submitted = verdict;
+      this.store.updateCard(cardId, { prs: JSON.stringify(now) });
+    }
+    this.store.log(cardId, `${verdict === "approve" ? "approved" : "requested changes on"} ${pr.repo}#${pr.number} on GitHub (from Telegram)`);
+    return pr;
+  }
+
+  private agentStartedAt(card: Card): number {
+    return this.store.events(card.id).findLast((e) => e.text.startsWith("worker started"))?.at ?? card.created_at;
   }
 
   /** Why this automation can't start a new run: its open card waits on a human. */

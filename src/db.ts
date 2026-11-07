@@ -39,8 +39,33 @@ export interface Card {
   attention: string | null; // why the card is in needs_you
   resume_lane: Lane | null; // where needs_you returns to once the agent works again
   summary: string | null;
+  /** CardVerdicts JSON from the last `hb done --pr`: the board offers to submit these on GitHub. */
+  prs: string | null;
+  quiet: number; // the last `hb done` asked not to be announced (nothing to report)
   created_at: number;
   updated_at: number;
+}
+
+/** A PR a run reviewed, and what the agent recommends. */
+export interface PullVerdict {
+  repo: string; // owner/name
+  number: number;
+  verdict: "approve" | "changes";
+}
+
+/** One run's verdicts. `key` is new each `hb done`, so a button from an earlier run can't act on this one. */
+export interface CardVerdicts {
+  key: string;
+  list: (PullVerdict & { submitted?: PullVerdict["verdict"] })[];
+}
+
+export function cardVerdicts(card: Pick<Card, "prs"> | null | undefined): CardVerdicts | null {
+  try {
+    const v = card?.prs ? JSON.parse(card.prs) : null;
+    return v && typeof v.key === "string" && Array.isArray(v.list) ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface Automation {
@@ -340,6 +365,8 @@ export class Store {
       attention: null,
       resume_lane: null,
       summary: c.summary ?? null,
+      prs: null,
+      quiet: 0,
       created_at: c.created_at,
       updated_at: c.updated_at,
     };

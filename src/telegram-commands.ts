@@ -1,4 +1,4 @@
-import type { Automation, Card, CardEvent, Project } from "./db.ts";
+import type { Automation, Card, CardEvent, Project, PullVerdict } from "./db.ts";
 import type { AgentStatus } from "./herdr.ts";
 import { esc, fit, md } from "./telegram-format.ts";
 
@@ -11,6 +11,8 @@ export interface Board {
   addCard(project: string, title: string, brief: string): Card;
   finish(cardId: number): Promise<Card>;
   runAutomation(name: string): Promise<Card>;
+  /** Submits a verdict from a Ready message's button (Pipeline.submitVerdict). */
+  submitVerdict(cardId: number, key: string, index: number, verdict: PullVerdict["verdict"]): Promise<PullVerdict>;
 }
 
 export interface Context {

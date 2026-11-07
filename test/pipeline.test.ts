@@ -614,3 +614,68 @@ describe("notify", () => {
     expect(events).toEqual(["started: null", "needs_you: Launch failed: pane gone"]);
   });
 });
+
+describe("done options", () => {
+  test("--quiet reaches Ready without a notification; --pr is kept on the card", async () => {
+    const events: string[] = [];
+    p = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7320", pollMs: 1, launchTimeoutMs: 500, notify: (e) => events.push(e.kind) });
+    const card = await started({ review: 0 });
+    const prs = [{ repo: "acme/api", number: 7, verdict: "approve" as const }];
+    expect(p.done(card.id, "No reviews requested.", { quiet: true }).lane).toBe("ready");
+    expect(events).toEqual(["started"]);
+    await p.reply(card.id, "go on");
+    expect(store.card(card.id)!.lane).toBe("working");
+    p.done(card.id, "reviewed one", { quiet: true, prs });
+    expect(events).toEqual(["started", "ready"]);
+    expect(JSON.parse(store.card(card.id)!.prs!).list).toEqual(prs);
+  });
+
+  test("a verdict is submitted once, for the PR the button names, and only from the latest run", async () => {
+    const gh: string[] = [];
+    let release = () => {};
+    p = new Pipeline(store, herdr, {
+      home, url: "http://127.0.0.1:7320", pollMs: 1, launchTimeoutMs: 500,
+      submitReview: async (repo, number, verdict) => {
+        gh.push(`${repo}#${number}=${verdict}`);
+        await new Promise<void>((r) => (release = r));
+      },
+    });
+    const card = await started({ review: 0 });
+    p.done(card.id, "two", { prs: [{ repo: "acme/api", number: 5, verdict: "approve" }, { repo: "acme/web", number: 5, verdict: "changes" }] });
+    const { key } = JSON.parse(store.card(card.id)!.prs!);
+    const first = p.submitVerdict(card.id, key, 1, "changes");
+    await expect(p.submitVerdict(card.id, key, 1, "changes")).rejects.toThrow("Already submitting acme/web#5.");
+    release();
+    expect(await first).toMatchObject({ repo: "acme/web", number: 5 });
+    await expect(p.submitVerdict(card.id, key, 1, "changes")).rejects.toThrow("acme/web#5 already got your change request.");
+    await expect(p.submitVerdict(card.id, "000000", 0, "approve")).rejects.toThrow("This button is from an earlier run of the card.");
+    expect(gh).toEqual(["acme/web#5=changes"]);
+    expect(store.events(card.id).at(-1)!.text).toBe("requested changes on acme/web#5 on GitHub (from Telegram)");
+  });
+
+  test("an automation's agent older than a week is replaced on the next fire", async () => {
+    const a = store.addAutomation({ name: "sweep", project_id: projectId, trigger: "every 1m", title: "Sweep", brief: "b", worktree: 0, review: 0, worker: null, reviewer: null });
+    const card = (await p.fire(a))!;
+    await p.tick();
+    await p.settle();
+    p.done(card.id, "ok");
+    const prompts = herdr.prompts.length;
+    const again = (await p.fire(a, Date.now() + 8 * 86_400_000))!;
+    expect(again.id).toBe(card.id);
+    expect(again.lane).toBe("todo");
+    expect(herdr.prompts).toHaveLength(prompts);
+    expect(store.events(card.id).map((e) => e.text)).toContain("the agent is over a week old: finishing it so this run starts a fresh one");
+  });
+
+  test("the weekly replacement never cuts off an agent in the middle of a turn", async () => {
+    const a = store.addAutomation({ name: "sweep", project_id: projectId, trigger: "every 1m", title: "Sweep", brief: "b", worktree: 0, review: 0, worker: null, reviewer: null });
+    const card = (await p.fire(a))!;
+    await p.tick();
+    await p.settle();
+    p.done(card.id, "ok");
+    herdr.status.set(store.card(card.id)!.worker_pane!, "working");
+    expect(await p.fire(a, Date.now() + 8 * 86_400_000)).toBeNull();
+    expect(store.card(card.id)!.lane).toBe("ready");
+    expect(store.events(card.id).at(-1)!.text).toContain("waiting: the agent is working");
+  });
+});

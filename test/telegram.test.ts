@@ -13,6 +13,8 @@ let home: string;
 let calls: { method: string; params: any }[];
 let replies: { id: number; text: string }[];
 let replyError: string | null;
+let reviewError: string | null;
+let submitted: string[];
 let updates: any[][]; // each getUpdates call takes the next batch; then it hangs until aborted
 let tg: Telegram;
 let projects: Project[];
@@ -47,6 +49,12 @@ const fakeBoard: Board = {
     c.lane = "done";
     return c;
   },
+  async submitVerdict(cardId, key, index, verdict) {
+    if (reviewError) throw new Error(reviewError);
+    const pr = JSON.parse(cards.find((c) => c.id === cardId)!.prs!).list[index];
+    submitted.push(`${pr.repo}#${pr.number}=${verdict}`);
+    return pr;
+  },
   async runAutomation(name) {
     if (name !== "nightly") throw new Error(`no automation '${name}'`);
     return card;
@@ -59,6 +67,8 @@ beforeEach(() => {
   calls = [];
   replies = [];
   replyError = null;
+  reviewError = null;
+  submitted = [];
   updates = [];
   projects = [{ id: 1, name: "web", path: "/repo/web" } as Project];
   cards = [{ ...card, agent_status: "working" }];
@@ -390,4 +400,66 @@ test("a topic delete that fails keeps the topic on record", async () => {
   tg.notify({ kind: "deleted", card });
   await tg.flush();
   expect(JSON.parse(readFileSync(`${home}/telegram.json`, "utf8")).topics).toEqual({ "5": 101 });
+});
+
+const PRS = JSON.stringify({
+  key: "abc123",
+  list: [
+    { repo: "acme/api", number: 1035, verdict: "approve" },
+    { repo: "acme/web", number: 1035, verdict: "changes" },
+  ],
+});
+const press = (data: string, keyboard: any[][], from = ME) =>
+  tg.press({ id: "q1", from: { id: from }, data, message: { message_id: 77, chat: { id: CHAT }, message_thread_id: 101, reply_markup: { inline_keyboard: keyboard } } });
+const keyboardOf = (method: string) => calls.filter((c) => c.method === method).at(-1)!.params.reply_markup.inline_keyboard;
+
+test("a Ready card with reviewed PRs gets a verdict row per PR, named with its repo, recommendation starred", async () => {
+  await linked();
+  cards[0]!.prs = PRS;
+  tg.notify({ kind: "ready", card: { ...card, summary: "two PRs", prs: PRS } });
+  await tg.flush();
+  const rows = keyboardOf("sendMessage");
+  expect(rows.map((row: any[]) => row.map((b) => b.text))).toEqual([
+    ["⭐ ✅ Approve api#1035", "✋ Changes api#1035"],
+    ["✅ Approve web#1035", "⭐ ✋ Changes web#1035"],
+  ]);
+  expect(rows[1][1].callback_data).toBe("v:5:abc123:1:c");
+});
+
+test("a verdict needs a confirming tap; Cancel puts the row back; Yes submits that PR and removes its row", async () => {
+  await linked();
+  cards[0]!.prs = PRS;
+  tg.notify({ kind: "ready", card: { ...card, prs: PRS } });
+  await tg.flush();
+  const rows = keyboardOf("sendMessage");
+  await press("v:5:abc123:1:a", rows);
+  expect(submitted).toEqual([]);
+  const confirm = keyboardOf("editMessageReplyMarkup");
+  expect(confirm[1].map((b: any) => b.text)).toEqual(["Yes, approve web#1035", "Cancel"]);
+  expect(confirm[0]).toEqual(rows[0]);
+  await press("n:5:abc123:1:a", confirm);
+  expect(keyboardOf("editMessageReplyMarkup")).toEqual(rows);
+  await press("y:5:abc123:1:a", confirm);
+  expect(submitted).toEqual(["acme/web#1035=approve"]);
+  expect(keyboardOf("editMessageReplyMarkup")).toEqual([rows[0]]);
+  expect(sent().at(-1)).toBe('✅ Approved <a href="https://github.com/acme/web/pull/1035">web#1035</a> on GitHub.');
+});
+
+test("buttons ignore anyone else, and a button from an earlier run", async () => {
+  await linked();
+  cards[0]!.prs = PRS;
+  await press("y:5:abc123:0:a", [], 7);
+  await press("y:5:ffffff:0:a", []);
+  expect(submitted).toEqual([]);
+  expect(calls.filter((c) => c.method === "answerCallbackQuery").map((c) => c.params.text)).toEqual([undefined, "This button is from an earlier run of the card."]);
+});
+
+test("a verdict GitHub refuses says why and keeps the buttons", async () => {
+  await linked();
+  cards[0]!.prs = PRS;
+  reviewError = "gh pr review: Can not approve your own pull request";
+  const confirm = [[{ text: "Yes", callback_data: "y:5:abc123:0:a" }]];
+  await press("y:5:abc123:0:a", confirm);
+  expect(sent().at(-1)).toBe("⚠️ Not submitted on api#1035: gh pr review: Can not approve your own pull request");
+  expect(keyboardOf("editMessageReplyMarkup")[0][0].text).toBe("⭐ ✅ Approve api#1035");
 });

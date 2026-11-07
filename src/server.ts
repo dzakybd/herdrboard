@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { basename } from "node:path";
 import { attachmentPath, listAttachments, removeAttachments, saveAttachments } from "./attachments.ts";
 import { finishCleanup } from "./cleanup.ts";
-import { LANES, Store, type Lane } from "./db.ts";
+import { LANES, Store, type Lane, type PullVerdict } from "./db.ts";
 import { gate, loadToken } from "./auth.ts";
 import { expandHome, listDirs } from "./fs.ts";
 import { cliHerdr } from "./herdr.ts";
@@ -25,6 +25,25 @@ const DRAIN_MS = 60_000;
 const PROJECT_FIELDS = ["name", "base", "review", "orchestrator", "worker", "reviewer"];
 const CARD_FIELDS = ["title", "brief", "review", "worktree", "worker", "reviewer"];
 const AUTOMATION_FIELDS = ["project_id", "trigger", "title", "brief", "worktree", "review", "worker", "reviewer", "enabled"];
+
+/** `gh pr review` as the user, killed after a minute so a hung network can't hold the Telegram bot. */
+async function ghReview(repo: string, number: number, verdict: PullVerdict["verdict"]): Promise<void> {
+  const flags = verdict === "approve" ? ["--approve"] : ["--request-changes", "--body", "Requesting changes: see my review comments on this PR."];
+  const proc = Bun.spawn(["gh", "pr", "review", String(number), `--repo=${repo}`, ...flags], { stdout: "ignore", stderr: "pipe", timeout: 60_000 });
+  const code = await proc.exited;
+  if (code !== 0) throw new Error(`gh pr review: ${(await new Response(proc.stderr).text()).trim() || (proc.signalCode ? "timed out" : `exit ${code}`)}`);
+}
+
+/** `owner/repo#123=approve|changes`, as `hb done --pr` sends them. */
+export function parseVerdicts(raw: unknown): PullVerdict[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) throw new Error("prs must be a list");
+  return raw.map((v) => {
+    const m = String(v).trim().match(/^([\w.-]+\/[\w.-]+)#(\d+)=(approve|changes)$/);
+    if (!m) throw new Error(`--pr '${v}' should look like owner/repo#123=approve or =changes`);
+    return { repo: m[1]!, number: Number(m[2]), verdict: m[3] as PullVerdict["verdict"] };
+  });
+}
 
 function pick(body: Record<string, unknown>, fields: string[]): Record<string, any> {
   return Object.fromEntries(Object.entries(body).filter(([k]) => fields.includes(k)));
@@ -48,8 +67,9 @@ export function serve(): void {
       return c;
     },
     runAutomation: (name) => runAutomation(name),
+    submitVerdict: (cardId, key, index, verdict) => pipe.submitVerdict(cardId, key, index, verdict),
   });
-  const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}`, cleanup: finishCleanup, notify: (e) => telegram.notify(e) });
+  const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}`, cleanup: finishCleanup, notify: (e) => telegram.notify(e), submitReview: ghReview });
 
   /** Role override fields (name, config object or empty) → validated JSON column values. */
   const roles = <T extends Record<string, any>>(patch: T): T => {
@@ -193,7 +213,7 @@ export function serve(): void {
       pipe.startQueued();
       return c;
     },
-    "POST /api/cards/:id/done": (_r, p, body) => pipe.done(Number(p.id), String(body.summary ?? "")),
+    "POST /api/cards/:id/done": (_r, p, body) => pipe.done(Number(p.id), String(body.summary ?? ""), { quiet: Boolean(body.quiet), prs: parseVerdicts(body.prs) }),
     "POST /api/cards/:id/review": (_r, p, body) => pipe.review(Number(p.id), Boolean(body.approve), String(body.notes ?? "")),
     "POST /api/cards/:id/ask": (_r, p, body) => pipe.ask(Number(p.id), String(body.question)),
     "POST /api/cards/:id/reply": (_r, p, body) => pipe.reply(Number(p.id), String(body.text ?? ""), body.attachments, body.review === undefined ? undefined : Boolean(body.review)),

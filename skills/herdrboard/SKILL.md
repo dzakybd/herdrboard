@@ -27,7 +27,7 @@ Your environment has `HB_ROLE` (`worker`, `reviewer` or `orchestrator`), plus `H
 
 | Role | When | Command |
 | --- | --- | --- |
-| worker | task finished and committed | `hb done --summary "<full result, Markdown is rendered>"` |
+| worker | task finished and committed | `hb done --summary "<full result, Markdown is rendered>"`; add `--quiet` when there is nothing to report, and `--pr owner/repo#123=approve` (or `=changes`) per PR you reviewed |
 | reviewer | work is correct | `hb review --approve` |
 | reviewer | work needs fixes | `hb review --changes "<numbered, concrete fixes>"` |
 | any | you need a human decision | `hb ask "<question>"`, then wait for the reply |

@@ -1,6 +1,6 @@
 import { existsSync, rmSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import type { Card } from "./db.ts";
+import { cardVerdicts, type Card, type PullVerdict } from "./db.ts";
 import { readJson, writeJson } from "./fs.ts";
 import type { BoardEvent } from "./pipeline.ts";
 import { COMMANDS, MENU, type Board } from "./telegram-commands.ts";
@@ -62,9 +62,22 @@ interface Message {
   migrate_to_chat_id?: number;
 }
 
+interface Button {
+  text: string;
+  callback_data: string;
+}
+
+interface CallbackQuery {
+  id: string;
+  from: { id: number };
+  data?: string;
+  message?: { message_id: number; chat: { id: number }; message_thread_id?: number; reply_markup?: { inline_keyboard: Button[][] } };
+}
+
 interface Update {
   update_id: number;
   message?: Message;
+  callback_query?: CallbackQuery;
 }
 
 const MAX_TEXT = 4000;
@@ -139,13 +152,14 @@ export class Telegram {
     void (async () => {
       while (!ctl.signal.aborted) {
         try {
-          const updates: Update[] = await api("getUpdates", { offset: this.bot!.state.offset, timeout: POLL_SECONDS, allowed_updates: ["message"] }, AbortSignal.any([ctl.signal, AbortSignal.timeout(POLL_SECONDS * 1000 + CALL_MS)]));
+          const updates: Update[] = await api("getUpdates", { offset: this.bot!.state.offset, timeout: POLL_SECONDS, allowed_updates: ["message", "callback_query"] }, AbortSignal.any([ctl.signal, AbortSignal.timeout(POLL_SECONDS * 1000 + CALL_MS)]));
           if (ctl.signal.aborted) return;
           for (const u of updates) {
             // Saved before handling: a crash mid-reply drops that message rather than sending it to the agent twice.
             this.bot!.state.offset = u.update_id + 1;
             this.save();
             if (u.message) await this.handle(u.message).catch((e) => console.error(`telegram: ${(e as Error).message}`));
+            if (u.callback_query) await this.press(u.callback_query).catch((e) => console.error(`telegram: ${(e as Error).message}`));
           }
         } catch (e) {
           if (ctl.signal.aborted) return;
@@ -203,6 +217,60 @@ export class Telegram {
     await api("setMessageReaction", { chat_id: state.chat_id, message_id: m.message_id, reaction: [{ type: "emoji", emoji: "👍" }] }).catch(() => {});
   }
 
+  /**
+   * A verdict button under a Ready message. A tap only asks to confirm; "Yes"
+   * submits it on GitHub as the user. Buttons carry the run's key and the PR's
+   * place in it, so one from an earlier run can't act on a different PR.
+   */
+  async press(q: CallbackQuery): Promise<void> {
+    if (!this.bot) return;
+    const { state, api } = this.bot;
+    // Answered at once: Telegram drops a tap left unanswered while gh runs.
+    const answer = (text?: string) => api("answerCallbackQuery", { callback_query_id: q.id, text }).catch(() => {});
+    const msg = q.message;
+    if (q.from.id !== state.user_id || !msg || msg.chat.id !== state.chat_id) return void (await answer());
+    const m = q.data?.match(/^([vyn]):(\d+):([0-9a-f]+):(\d+):([ac])$/);
+    if (!m) return void (await answer());
+    const [, step, cardId, key = "", idx, v] = m;
+    const index = Number(idx);
+    const card = this.board.cards().find((c) => c.id === Number(cardId));
+    const prs = cardVerdicts(card);
+    const pr = prs?.key === key ? prs.list[index] : undefined;
+    if (!card || !pr) return void (await answer("This button is from an earlier run of the card."));
+    const verdict: PullVerdict["verdict"] = v === "a" ? "approve" : "changes";
+    const name = prName(pr);
+    const rows = msg.reply_markup?.inline_keyboard ?? [];
+    const swap = (row: Button[] | null) => {
+      const next = rows.flatMap((r) => (rowKey(r) === `${key}:${index}` ? (row ? [row] : []) : [r]));
+      return api("editMessageReplyMarkup", { chat_id: state.chat_id, message_id: msg.message_id, reply_markup: { inline_keyboard: next } }).catch(() => {});
+    };
+    if (pr.submitted) {
+      await swap(null);
+      return void (await answer(`${name} already has your verdict.`));
+    }
+    if (step === "v") {
+      await swap([
+        { text: `Yes, ${verdict === "approve" ? "approve" : "request changes on"} ${name}`, callback_data: `y:${card.id}:${key}:${index}:${v}` },
+        { text: "Cancel", callback_data: `n:${card.id}:${key}:${index}:${v}` },
+      ]);
+      return void (await answer());
+    }
+    if (step === "n") {
+      await swap(verdictRow(card.id, key, index, pr));
+      return void (await answer("Cancelled"));
+    }
+    await answer("Submitting…");
+    try {
+      await this.board.submitVerdict(card.id, key, index, verdict);
+    } catch (e) {
+      await swap(verdictRow(card.id, key, index, pr));
+      return this.post(state.chat_id!, msg.message_thread_id, `⚠️ Not submitted on ${esc(name)}: ${esc((e as Error).message)}`);
+    }
+    await swap(null);
+    const link = `<a href="https://github.com/${esc(pr.repo)}/pull/${pr.number}">${esc(name)}</a>`;
+    await this.post(state.chat_id!, msg.message_thread_id, verdict === "approve" ? `✅ Approved ${link} on GitHub.` : `✋ Requested changes on ${link} on GitHub.`);
+  }
+
   private async link(m: Message, code: string): Promise<void> {
     const { state, api } = this.bot!;
     if (state.chat_id || code !== state.code || !m.from) return;
@@ -249,9 +317,12 @@ export class Telegram {
     // A reopened automation card comes back to the topic Finish closed.
     if (kind === "started" && thread) await api("reopenForumTopic", { chat_id: state.chat_id, message_thread_id: thread }).catch(() => {});
     const html = message(kind, card);
+    const prs = kind === "ready" ? cardVerdicts(card) : null;
+    const keyboard = prs?.list.flatMap((p, i) => (p.submitted ? [] : [verdictRow(card.id, prs.key, i, p)])) ?? [];
+    const markup = keyboard.length ? { inline_keyboard: keyboard } : undefined;
     if (thread) {
       try {
-        return await this.post(state.chat_id!, thread, html);
+        return await this.post(state.chat_id!, thread, html, markup);
       } catch (e) {
         // Topic deleted in Telegram: start a new one instead of failing every event for this card.
         if (!/thread not found/i.test((e as Error).message)) throw e;
@@ -260,17 +331,17 @@ export class Telegram {
     const topic = await api("createForumTopic", { chat_id: state.chat_id, name: `#${card.id} ${card.title}`.slice(0, 128) });
     thread = state.topics[card.id] = topic.message_thread_id as number;
     this.save();
-    await this.post(state.chat_id!, thread, html);
+    await this.post(state.chat_id!, thread, html, markup);
   }
 
   /** Sends formatted text; if Telegram refuses the markup, the same words go as plain text. */
-  private async post(chat_id: number, thread: number | undefined, html: string): Promise<void> {
+  private async post(chat_id: number, thread: number | undefined, html: string, reply_markup?: object): Promise<void> {
     const api = this.bot!.api;
     try {
-      await api("sendMessage", { chat_id, message_thread_id: thread, text: html, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+      await api("sendMessage", { chat_id, message_thread_id: thread, text: html, parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup });
     } catch (e) {
       if (!/can't parse entities|unsupported start tag|unclosed|can't find end/i.test((e as Error).message)) throw e;
-      await api("sendMessage", { chat_id, message_thread_id: thread, text: cut(plain(html)) });
+      await api("sendMessage", { chat_id, message_thread_id: thread, text: cut(plain(html)), reply_markup });
     }
   }
 
@@ -282,6 +353,20 @@ export class Telegram {
     return `${this.home}/telegram.json`;
   }
 }
+
+/** "api#1035": the repo's name without its owner, so two repos' #12 never look alike. */
+const prName = (p: PullVerdict) => `${p.repo.split("/")[1]}#${p.number}`;
+
+/** The agent's recommendation is starred; the choice stays the user's. */
+function verdictRow(cardId: number, key: string, index: number, p: PullVerdict): Button[] {
+  return [
+    { text: `${p.verdict === "approve" ? "⭐ " : ""}✅ Approve ${prName(p)}`, callback_data: `v:${cardId}:${key}:${index}:a` },
+    { text: `${p.verdict === "changes" ? "⭐ " : ""}✋ Changes ${prName(p)}`, callback_data: `v:${cardId}:${key}:${index}:c` },
+  ];
+}
+
+/** "<run key>:<index>" from a verdict row's buttons. */
+const rowKey = (row: Button[]) => row[0]?.callback_data.split(":").slice(2, 4).join(":");
 
 /** Telegram's length limit, cut on characters so an emoji is never split in half. */
 function cut(text: string): string {
