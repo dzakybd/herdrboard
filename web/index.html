@@ -437,7 +437,7 @@ details > .stack, details > form { margin-top: 16px; }
             <option value="sat">Saturday</option>
             <option value="sun">Sunday</option>
           </select></label>
-          <label class="field" data-repeat="daily weekdays weekly"><span>Hour</span><select name="hour"></select></label>
+          <label class="field" data-repeat="daily weekdays weekly"><span>Hours <small>(pick one or more)</small></span><select name="hour" multiple size="4"></select></label>
           <label class="field" data-repeat="daily weekdays weekly"><span>Minute</span><select name="minute"></select></label>
           <label class="field" data-repeat="every"><span>Every</span><input type="number" name="amount" value="30" min="1" step="1" required></label>
           <label class="field" data-repeat="every"><span>Unit</span><select name="unit">
@@ -883,17 +883,20 @@ const UNIT_NAMES = { m: "minute", h: "hour", d: "day" };
 function parseSchedule(trigger) {
   const [kind, a, b] = trigger.trim().toLowerCase().split(/\s+/);
   if (kind === "every") return { repeat: kind, amount: parseInt(a), unit: a.slice(-1) };
-  const clock = (t) => { const [hour, minute] = t.split(":"); return { hour: hour.padStart(2, "0"), minute }; };
-  return kind === "weekly" ? { repeat: kind, day: a.slice(0, 3), ...clock(b) } : { repeat: kind, ...clock(a) };
+  // Several times share the form's one minute; a list with mixed minutes keeps the first.
+  const clocks = (list) => { const t = list.split(",").map((c) => c.split(":")); return { hour: t.map(([h]) => h.padStart(2, "0")), minute: t[0][1] }; };
+  return kind === "weekly" ? { repeat: kind, day: a.slice(0, 3), ...clocks(b) } : { repeat: kind, ...clocks(a) };
 }
 function scheduleTrigger(f) {
-  const repeat = f.repeat.value, time = `${f.hour.value}:${f.minute.value}`;
+  const repeat = f.repeat.value;
   if (repeat === "every") return `every ${f.amount.value}${f.unit.value}`;
+  const hours = [...f.hour.selectedOptions].map((o) => o.value);
+  const time = (hours.length ? hours : ["09"]).map((h) => `${h}:${f.minute.value}`).join(",");
   return repeat === "weekly" ? `weekly ${f.day.value} ${time}` : `${repeat} ${time}`;
 }
 function describeSchedule(trigger) {
   const { repeat, amount, unit, day, hour, minute } = parseSchedule(trigger);
-  const time = `${hour}:${minute}`;
+  const time = hour.map((h) => `${h}:${minute}`).join(", ");
   if (repeat === "every") return amount === 1 ? `Every ${UNIT_NAMES[unit]}` : `Every ${amount} ${UNIT_NAMES[unit]}s`;
   if (repeat === "weekly") return `Every ${DAY_NAMES[day]} at ${time}`;
   return `${repeat === "weekdays" ? "Weekdays" : "Every day"} at ${time}`;
@@ -937,7 +940,10 @@ function loadAutoForm(a = null) {
   if (a) {
     f.title.value = a.title; f.brief.value = a.brief;
     f.review.checked = Boolean(a.review); f.worktree.checked = Boolean(a.worktree);
-    for (const [k, v] of Object.entries(parseSchedule(a.trigger))) f[k].value = v;
+    for (const [k, v] of Object.entries(parseSchedule(a.trigger))) {
+      if (k === "hour") [...f.hour.options].forEach((o) => (o.selected = v.includes(o.value)));
+      else f[k].value = v;
+    }
   }
   syncSchedule();
   const roles = (worker, reviewer) => {

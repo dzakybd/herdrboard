@@ -4,11 +4,11 @@ import { parseTrigger, isDue, nextDue } from "../src/scheduler.ts";
 describe("parseTrigger", () => {
   test("parses the three forms", () => {
     expect(parseTrigger("every 30m")).toEqual({ type: "every", ms: 1_800_000 });
-    expect(parseTrigger("daily 09:00")).toEqual({ type: "daily", h: 9, m: 0 });
-    expect(parseTrigger("weekly Monday 14:30")).toEqual({ type: "weekly", weekday: 1, h: 14, m: 30 });
+    expect(parseTrigger("daily 09:00")).toEqual({ type: "daily", times: [{ h: 9, m: 0 }] });
+    expect(parseTrigger("weekly Monday 14:30")).toEqual({ type: "weekly", weekday: 1, times: [{ h: 14, m: 30 }] });
   });
   test("rejects garbage", () => {
-    for (const bad of ["every 30", "every 0m", "daily 25:00", "weekly xyz 09:00", "hourly", "every 30m extra"]) {
+    for (const bad of ["every 30", "every 0m", "daily 25:00", "weekly xyz 09:00", "hourly", "every 30m extra", "daily 09:00,", "weekdays 9,12"]) {
       expect(() => parseTrigger(bad)).toThrow();
     }
   });
@@ -34,7 +34,7 @@ describe("isDue", () => {
   });
   test("weekdays: skips the weekend", () => {
     const t = parseTrigger("weekdays 09:00");
-    expect(t).toEqual({ type: "weekdays", h: 9, m: 0 });
+    expect(t).toEqual({ type: "weekdays", times: [{ h: 9, m: 0 }] });
     const friEvening = new Date(2026, 9, 30, 18, 0).getTime();
     const sunNoon = new Date(2026, 10, 1, 12, 0).getTime();
     const monNoon = new Date(2026, 10, 2, 12, 0).getTime();
@@ -46,5 +46,21 @@ describe("isDue", () => {
     expect(nextDue(parseTrigger("daily 14:30"), 0, now)).toBe(new Date(2026, 9, 28, 14, 30).getTime());
     expect(nextDue(parseTrigger("daily 09:00"), 0, now)).toBe(new Date(2026, 9, 29, 9, 0).getTime());
     expect(nextDue(parseTrigger("weekly fri 09:00"), 0, now)).toBe(new Date(2026, 9, 30, 9, 0).getTime());
+  });
+});
+
+describe("several times a day", () => {
+  const t = parseTrigger("weekdays 18:00,09:00,12:00,15:00,12:00");
+  test("parses sorted, without duplicates", () => {
+    expect(t).toEqual({ type: "weekdays", times: [9, 12, 15, 18].map((h) => ({ h, m: 0 })) });
+  });
+  test("each slot fires once, and nights and weekends stay quiet", () => {
+    const wed = (h: number, m = 0) => new Date(2026, 9, 28, h, m).getTime();
+    expect(isDue(t, wed(9, 1), wed(11, 59))).toBe(false);
+    expect(isDue(t, wed(9, 1), wed(12, 0))).toBe(true);
+    expect(nextDue(t, wed(12, 0), wed(12, 5))).toBe(wed(15));
+    expect(nextDue(t, wed(18, 0), wed(22))).toBe(new Date(2026, 9, 29, 9, 0).getTime());
+    const fri = new Date(2026, 9, 30, 18, 0).getTime();
+    expect(nextDue(t, fri, fri + 3_600_000)).toBe(new Date(2026, 10, 2, 9, 0).getTime());
   });
 });
