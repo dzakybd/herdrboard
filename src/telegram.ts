@@ -222,6 +222,8 @@ export class Telegram {
       if (thread) await api("closeForumTopic", { chat_id: state.chat_id, message_thread_id: thread });
       return;
     }
+    // A reopened automation card comes back to the topic Finish closed.
+    if (kind === "started" && thread) await api("reopenForumTopic", { chat_id: state.chat_id, message_thread_id: thread }).catch(() => {});
     const html = message(kind, card);
     if (thread) {
       try {

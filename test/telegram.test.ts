@@ -335,3 +335,13 @@ test("markup Telegram refuses is sent again as plain text", async () => {
   expect(plain.parse_mode).toBeUndefined();
   expect(plain.text).toBe("✅ Ready\n\nDone: fixed login()\n\nReply here to follow up, or /finish.");
 });
+
+test("a reopened card comes back to its topic, reopened", async () => {
+  await linked();
+  tg.notify({ kind: "started", card });
+  tg.notify({ kind: "done", card: { ...card, lane: "done" } });
+  tg.notify({ kind: "started", card });
+  await tg.flush();
+  expect(calls.map((c) => c.method)).toEqual(["createForumTopic", "sendMessage", "closeForumTopic", "reopenForumTopic", "sendMessage"]);
+  expect(calls.at(-1)!.params.message_thread_id).toBe(101);
+});

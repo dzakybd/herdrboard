@@ -105,7 +105,9 @@ export class Pipeline {
     const role = resolveRole(this.store.settings(), "worker", project, card);
     if (!project.base) card = this.store.updateCard(id, { worktree: 0 });
     if (card.worktree) {
-      const branch = `hb/${card.id}-${slug(card.title)}`;
+      // A reopened automation card can't reuse the branch an earlier run kept.
+      const runs = this.store.runCount(id);
+      const branch = `hb/${card.id}-${slug(card.title)}${runs > 1 ? `-run${runs}` : ""}`;
       const wt = await this.herdr.worktreeCreate(project.path, branch, project.base);
       card = this.store.updateCard(id, { branch, cwd: wt.path, workspace_id: wt.workspaceId, worker_pane: wt.paneId });
       this.store.log(id, `worktree ${wt.path} on ${branch}`);
@@ -440,6 +442,29 @@ export class Pipeline {
         if (!open.attention) this.store.updateCard(open.id, { attention: `Automation "${a.title}" is paused until this card is finished: ${reason}` });
         return null;
       }
+    }
+    // A finished card is the automation's card all the same: reopen it, so its id and Telegram topic stay.
+    const last = this.store.automationCards(a.id, 1)[0];
+    if (last?.lane === "done") {
+      const card = this.store.updateCard(last.id, {
+        title: a.title,
+        brief: a.brief,
+        review: a.review,
+        worktree: a.worktree,
+        worker: a.worker,
+        reviewer: a.reviewer,
+        lane: "todo",
+        attention: null,
+        resume_lane: null,
+        summary: null,
+        round: 0,
+        worked: 0,
+        branch: null,
+        cwd: null,
+      });
+      this.store.addRun(a.id, card.id, now);
+      this.store.log(card.id, `reopened for run ${this.store.runCount(card.id)}, with a fresh agent`);
+      return card;
     }
     const card = this.store.addCard({
       project_id: a.project_id,

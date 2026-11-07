@@ -511,13 +511,31 @@ describe("automations", () => {
     expect(store.runs(a.id).map((r) => r.summary)).toEqual([null, "the first run"]);
   });
 
-  test("the next fire finishes a Ready card whose agent is gone and replaces it", async () => {
+  test("a Ready card whose agent is gone is finished and reopened: same card, fresh agent", async () => {
     const a = sweep();
     const first = (await p.fire(a))!;
-    store.updateCard(first.id, { lane: "ready" });
+    store.updateCard(first.id, { lane: "ready", summary: "old run" });
     const second = (await p.fire(a))!;
-    expect(store.card(first.id)!.lane).toBe("done");
-    expect(second.lane).toBe("todo");
+    expect(second.id).toBe(first.id);
+    expect(second).toMatchObject({ lane: "todo", summary: null });
+    expect(store.events(first.id).map((e) => e.text)).toContain("finished");
+    expect(store.cards()).toHaveLength(1);
+  });
+
+  test("after Finish, the next fire reopens the same card, on a branch of its own", async () => {
+    const a = store.addAutomation({ name: "wt", project_id: projectId, trigger: "every 1m", title: "Nightly", brief: "b", worktree: 1, review: 0, worker: null, reviewer: null });
+    const card = (await p.fire(a))!;
+    await p.tick();
+    await p.settle();
+    expect(store.card(card.id)!.branch).toBe(`hb/${card.id}-nightly`);
+    p.done(card.id, "ok");
+    await p.finish(card.id);
+    const again = (await p.fire(a))!;
+    expect(again.id).toBe(card.id);
+    await p.tick();
+    await p.settle();
+    expect(store.card(card.id)!).toMatchObject({ lane: "working", branch: `hb/${card.id}-nightly-run2` });
+    expect(store.runs(a.id).map((r) => r.summary)).toEqual([null, "ok"]);
   });
 
   test("a Ready card that can't be finished stays, and the fire is skipped", async () => {
@@ -565,7 +583,7 @@ describe("automations", () => {
     const a = sweep();
     const first = (await p.fire(a))!;
     store.updateCard(first.id, { lane: "ready" });
-    const second = (await p.fire(a))!;
+    const second = store.addCard({ project_id: projectId, title: "Sweep", brief: "", lane: "todo", review: 0, worktree: 0, automation_id: a.id });
     expect(store.automationCards(a.id).map((c) => c.id)).toEqual([second.id, first.id]);
     expect(store.automationCards(a.id, 1)).toHaveLength(1);
   });
