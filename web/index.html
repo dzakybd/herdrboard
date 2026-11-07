@@ -896,8 +896,8 @@ function scheduleTrigger(f) {
 }
 function describeSchedule(trigger) {
   const { repeat, amount, unit, day, hour, minute } = parseSchedule(trigger);
-  const time = hour.map((h) => `${h}:${minute}`).join(", ");
   if (repeat === "every") return amount === 1 ? `Every ${UNIT_NAMES[unit]}` : `Every ${amount} ${UNIT_NAMES[unit]}s`;
+  const time = hour.map((h) => `${h}:${minute}`).join(", ");
   if (repeat === "weekly") return `Every ${DAY_NAMES[day]} at ${time}`;
   return `${repeat === "weekdays" ? "Weekdays" : "Every day"} at ${time}`;
 }
