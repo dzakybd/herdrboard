@@ -1,5 +1,6 @@
 import type { Automation, Card, CardEvent, Project } from "./db.ts";
 import type { AgentStatus } from "./herdr.ts";
+import { esc, fit, md } from "./telegram-format.ts";
 
 /** What Telegram may do on the board: the same operations the web UI and `hb` use. */
 export interface Board {
@@ -24,10 +25,12 @@ export interface Context {
 interface Command {
   usage: string;
   help: string;
+  /** Telegram HTML: escape anything that came from a user or an agent. */
   run(ctx: Context): Promise<string>;
 }
 
 const label = (lane: string) => lane.replace("_", " ");
+const LANE_ICON: Record<string, string> = { backlog: "🗂", todo: "📋", working: "⚙️", review: "🔍", needs_you: "❓", ready: "✅", done: "🏁" };
 
 export const COMMANDS: Record<string, Command> = {
   new: {
@@ -51,7 +54,7 @@ export const COMMANDS: Record<string, Command> = {
       }
       if (!words.length) throw new Error("usage: /new [project] <title>, then the brief on the next lines");
       const card = board.addCard(project.name, words.join(" "), rest.join("\n").trim());
-      return `Created #${card.id} in ${project.name} (${label(card.lane)}). Its topic opens when the agent starts.`;
+      return `🆕 Created <b>#${card.id}</b> in ${esc(project.name)} (${label(card.lane)}). Its topic opens when the agent starts.`;
     },
   },
   cards: {
@@ -62,11 +65,11 @@ export const COMMANDS: Record<string, Command> = {
       if (!open.length) return "No open cards.";
       return open
         .map((c) => {
-          const agent = c.agent_status ? `, agent ${c.agent_status}` : "";
-          const why = c.lane === "needs_you" && c.attention ? `\n   ${c.attention.split("\n")[0]}` : "";
-          return `#${c.id} ${label(c.lane)}${agent}: ${c.title}${why}`;
+          const agent = c.agent_status ? ` · agent ${c.agent_status}` : "";
+          const why = c.lane === "needs_you" && c.attention ? `\n   <i>${esc(c.attention.split("\n")[0]!.slice(0, 200))}</i>` : "";
+          return `${LANE_ICON[c.lane] ?? "•"} <b>#${c.id}</b> ${esc(c.title)}\n   ${label(c.lane)}${agent}${why}`;
         })
-        .join("\n");
+        .join("\n\n");
     },
   },
   status: {
@@ -74,13 +77,13 @@ export const COMMANDS: Record<string, Command> = {
     help: "a card's lane, what it waits on, summary and recent activity (in a topic: that card)",
     async run({ board, args, topicCard }) {
       const card = pick(board, args, topicCard, "status");
-      const lines = [`#${card.id} ${card.title}`, `Lane: ${label(card.lane)}${card.agent_status ? ` (agent ${card.agent_status})` : ""}`];
-      if (card.branch) lines.push(`Branch: ${card.branch}`);
-      if (card.attention) lines.push("", `Waiting on you: ${card.attention}`);
-      if (card.summary) lines.push("", `Summary: ${card.summary}`);
+      const head = [`${LANE_ICON[card.lane] ?? "•"} <b>#${card.id} ${esc(card.title)}</b>`, `${label(card.lane)}${card.agent_status ? ` · agent ${card.agent_status}` : ""}`];
+      if (card.branch) head.push(`<code>${esc(card.branch)}</code>`);
       const recent = board.events(card.id).slice(-5);
-      if (recent.length) lines.push("", "Recent:", ...recent.map((e) => `- ${new Date(e.at).toTimeString().slice(0, 5)} ${e.text.split("\n")[0]!.slice(0, 200)}`));
-      return lines.join("\n");
+      const tail = recent.length ? ["", "<b>Recent</b>", ...recent.map((e) => `<code>${new Date(e.at).toTimeString().slice(0, 5)}</code> ${esc(e.text.split("\n")[0]!.slice(0, 200))}`)] : [];
+      // Waiting-on and summary are Markdown from the agent; they get what room is left.
+      const body = [card.attention && `**Waiting on you**\n\n${card.attention}`, card.summary && `**Summary**\n\n${card.summary}`].filter(Boolean).join("\n\n");
+      return fit(body, (b) => [...head, ...(b ? ["", md(b)] : []), ...tail].join("\n"));
     },
   },
   finish: {
@@ -90,9 +93,9 @@ export const COMMANDS: Record<string, Command> = {
       const card = pick(board, args, topicCard, "finish");
       if (card.lane === "done") throw new Error(`#${card.id} is already finished`);
       // Said first: finishing closes this topic.
-      await say(`Finishing #${card.id}…`);
+      await say(`Finishing <b>#${card.id}</b>…`);
       await board.finish(card.id);
-      return `Finished #${card.id}.`;
+      return `🏁 Finished <b>#${card.id}</b>.`;
     },
   },
   projects: {
@@ -100,7 +103,7 @@ export const COMMANDS: Record<string, Command> = {
     help: "registered projects",
     async run({ board }) {
       const projects = board.projects();
-      return projects.length ? projects.map((p) => `${p.name}: ${p.path}`).join("\n") : "No projects yet.";
+      return projects.length ? projects.map((p) => `<b>${esc(p.name)}</b>\n<code>${esc(p.path)}</code>`).join("\n\n") : "No projects yet.";
     },
   },
   run: {
@@ -110,14 +113,14 @@ export const COMMANDS: Record<string, Command> = {
       const name = args.trim();
       if (!name) throw new Error("usage: /run <automation> (names are on the board's Automations page)");
       const card = await board.runAutomation(name);
-      return `Run started on #${card.id}.`;
+      return `▶️ Run started on <b>#${card.id}</b>.`;
     },
   },
   help: {
     usage: "/help",
     help: "this list",
     async run() {
-      return [...Object.values(COMMANDS).map((c) => `${c.usage}: ${c.help}`), "", "In a card's topic, plain text goes to its agent."].join("\n");
+      return [...Object.values(COMMANDS).map((c) => `<code>${esc(c.usage)}</code>\n${esc(c.help)}`), "<i>In a card's topic, anything else you write goes to its agent.</i>"].join("\n\n");
     },
   },
 };

@@ -4,6 +4,7 @@ import type { Card } from "./db.ts";
 import { readJson, writeJson } from "./fs.ts";
 import type { BoardEvent } from "./pipeline.ts";
 import { COMMANDS, MENU, type Board } from "./telegram-commands.ts";
+import { esc, fit, md, plain } from "./telegram-format.ts";
 
 /** Calls one Bot API method; throws with Telegram's description when it refuses. */
 export type BotApi = (method: string, params: object, signal?: AbortSignal) => Promise<any>;
@@ -158,7 +159,7 @@ export class Telegram {
     if (m.chat.id !== state.chat_id || m.from?.id !== state.user_id) return;
     const thread = m.is_topic_message ? m.message_thread_id : undefined;
     const topicCard = thread ? Number(Object.keys(state.topics).find((id) => state.topics[id] === thread)) || null : null;
-    const answer = (text: string) => api("sendMessage", { chat_id: state.chat_id, message_thread_id: thread, text: cut(text) });
+    const answer = (html: string) => this.post(state.chat_id!, thread, html);
     const command = m.text?.match(/^\/(\w+)(?:@(\w+))?(?:\s+([\s\S]*))?$/);
     if (command?.[2] && command[2] !== state.bot) return;
     // In a card's topic, a /command the bot doesn't know is for the agent (Claude Code's /compact and the like).
@@ -169,7 +170,7 @@ export class Telegram {
       try {
         await answer(await cmd.run({ board: this.board, args: command[3] ?? "", topicCard, say: async (t) => void (await answer(t)) }));
       } catch (e) {
-        await answer((e as Error).message);
+        await answer(esc((e as Error).message));
       }
       return;
     }
@@ -182,7 +183,7 @@ export class Telegram {
     try {
       await this.board.reply(cardId, m.text);
     } catch (e) {
-      await answer(`Not sent: ${(e as Error).message}`);
+      await answer(`Not sent: ${esc((e as Error).message)}`);
       return;
     }
     await api("setMessageReaction", { chat_id: state.chat_id, message_id: m.message_id, reaction: [{ type: "emoji", emoji: "👍" }] }).catch(() => {});
@@ -221,10 +222,10 @@ export class Telegram {
       if (thread) await api("closeForumTopic", { chat_id: state.chat_id, message_thread_id: thread });
       return;
     }
-    const text = cut(message(kind, card));
+    const html = message(kind, card);
     if (thread) {
       try {
-        return await api("sendMessage", { chat_id: state.chat_id, message_thread_id: thread, text });
+        return await this.post(state.chat_id!, thread, html);
       } catch (e) {
         // Topic deleted in Telegram: start a new one instead of failing every event for this card.
         if (!/thread not found/i.test((e as Error).message)) throw e;
@@ -233,7 +234,18 @@ export class Telegram {
     const topic = await api("createForumTopic", { chat_id: state.chat_id, name: `#${card.id} ${card.title}`.slice(0, 128) });
     thread = state.topics[card.id] = topic.message_thread_id as number;
     this.save();
-    await api("sendMessage", { chat_id: state.chat_id, message_thread_id: thread, text });
+    await this.post(state.chat_id!, thread, html);
+  }
+
+  /** Sends formatted text; if Telegram refuses the markup, the same words go as plain text. */
+  private async post(chat_id: number, thread: number | undefined, html: string): Promise<void> {
+    const api = this.bot!.api;
+    try {
+      await api("sendMessage", { chat_id, message_thread_id: thread, text: html, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+    } catch (e) {
+      if (!/can't parse entities|unsupported start tag|unclosed|can't find end/i.test((e as Error).message)) throw e;
+      await api("sendMessage", { chat_id, message_thread_id: thread, text: cut(plain(html)) });
+    }
   }
 
   private save(): void {
@@ -252,9 +264,12 @@ function cut(text: string): string {
 }
 
 function message(kind: Exclude<BoardEvent["kind"], "done">, card: Card): string {
-  if (kind === "started") return `▶️ Started\n\n${card.brief.trim().slice(0, 1500) || "(no brief)"}\n\n/status for progress. Reply here to talk to the agent.`;
-  if (kind === "ready") return `✅ Ready\n\n${card.summary || "(no summary)"}\n\nReply here to follow up, or finish it on the board.`;
+  if (kind === "started") {
+    // The brief is collapsed: a long one would otherwise fill the topic.
+    return fit(card.brief.trim() || "(no brief)", (b) => `▶️ <b>Started</b>\n<blockquote expandable>${md(b, { quoted: true })}</blockquote>\n<i>/status for progress. Reply here to talk to the agent.</i>`);
+  }
+  if (kind === "ready") return fit(card.summary || "(no summary)", (s) => `✅ <b>Ready</b>\n\n${md(s)}\n\n<i>Reply here to follow up, or /finish.</i>`);
   // No resume lane: the agent is gone, so a reply has nowhere to go.
   const next = card.resume_lane ? "Reply here to answer." : "Handle it on the board.";
-  return `❓ Needs you\n\n${card.attention}\n\n${next}`;
+  return fit(card.attention ?? "", (a) => `❓ <b>Needs you</b>\n\n${md(a)}\n\n<i>${next}</i>`);
 }

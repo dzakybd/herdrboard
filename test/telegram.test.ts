@@ -109,7 +109,8 @@ test("a card gets one topic; what it needs and its summary post there, and Finis
   expect(calls.map((c) => c.method)).toEqual(["createForumTopic", "sendMessage", "sendMessage", "closeForumTopic"]);
   expect(calls[0]!.params).toEqual({ chat_id: CHAT, name: "#5 Fix login" });
   expect(calls[1]!.params).toMatchObject({ chat_id: CHAT, message_thread_id: 101 });
-  expect(sent()[0]).toContain("Which DB?\n\nReply here to answer.");
+  expect(sent()[0]).toBe("❓ <b>Needs you</b>\n\nWhich DB?\n\n<i>Reply here to answer.</i>");
+  expect(calls[1]!.params.parse_mode).toBe("HTML");
   expect(sent()[1]).toContain("fixed it");
   expect(calls[3]!.params).toEqual({ chat_id: CHAT, message_thread_id: 101 });
 });
@@ -223,7 +224,7 @@ test("/new makes a card in the only project, with the lines after the title as i
   await linked();
   await tg.handle(general("/new Add dark mode\nUse the theme tokens.\nKeep contrast."));
   expect(cards.at(-1)).toMatchObject({ title: "Add dark mode", brief: "Use the theme tokens.\nKeep contrast.", project_id: 1 });
-  expect(sent()).toEqual([expect.stringContaining("Created #6 in web")]);
+  expect(sent()).toEqual(["🆕 Created <b>#6</b> in web (todo). Its topic opens when the agent starts."]);
 });
 
 test("/new with several projects needs the project first", async () => {
@@ -239,7 +240,7 @@ test("/cards lists open cards with what their agent is doing", async () => {
   await linked();
   cards.push({ ...card, id: 7, lane: "needs_you", attention: "Which DB?\nmore", agent_status: "idle" }, { ...card, id: 8, lane: "done", agent_status: null });
   await tg.handle(general("/cards"));
-  expect(sent()[0]).toBe("#5 working, agent working: Fix login\n#7 needs you, agent idle: Fix login\n   Which DB?");
+  expect(sent()[0]).toBe("⚙️ <b>#5</b> Fix login\n   working · agent working\n\n❓ <b>#7</b> Fix login\n   needs you · agent idle\n   <i>Which DB?</i>");
 });
 
 test("/status and /finish act on the topic's card, or the id given", async () => {
@@ -248,11 +249,11 @@ test("/status and /finish act on the topic's card, or the id given", async () =>
   await tg.flush();
   calls = [];
   await tg.handle(inTopic(101, "/status"));
-  expect(sent()[0]).toContain("#5 Fix login\nLane: working (agent working)");
+  expect(sent()[0]).toStartWith("⚙️ <b>#5 Fix login</b>\nworking · agent working");
   expect(sent()[0]).toContain("starting worker");
   expect(replies).toEqual([]);
   await tg.handle(inTopic(101, "/finish"));
-  expect(sent().slice(1)).toEqual(["Finishing #5…", "Finished #5."]);
+  expect(sent().slice(1)).toEqual(["Finishing <b>#5</b>…", "🏁 Finished <b>#5</b>."]);
   expect(cards[0]!.lane).toBe("done");
   await tg.handle(general("/status 99"));
   expect(sent().at(-1)).toBe("no card #99");
@@ -274,7 +275,7 @@ test("/run fires an automation and reports why one can't", async () => {
   await linked();
   await tg.handle(general("/run nightly"));
   await tg.handle(general("/run nope"));
-  expect(sent()).toEqual(["Run started on #5.", "no automation 'nope'"]);
+  expect(sent()).toEqual(["▶️ Run started on <b>#5</b>.", "no automation 'nope'"]);
 });
 
 test("linking puts the commands in Telegram's menu for that group", async () => {
@@ -290,7 +291,7 @@ test("a started card opens its topic with the brief", async () => {
   tg.notify({ kind: "started", card: { ...card, brief: "Write hello.txt" } });
   await tg.flush();
   expect(calls.map((c) => c.method)).toEqual(["createForumTopic", "sendMessage"]);
-  expect(sent()[0]).toStartWith("▶️ Started\n\nWrite hello.txt");
+  expect(sent()[0]).toBe("▶️ <b>Started</b>\n<blockquote expandable>Write hello.txt</blockquote>\n<i>/status for progress. Reply here to talk to the agent.</i>");
 });
 
 test("a card id must be a number: /finish never falls back to the topic's card on a typo", async () => {
@@ -302,7 +303,7 @@ test("a card id must be a number: /finish never falls back to the topic's card o
   expect(sent()).toEqual(["not a card id: 12 please"]);
   expect(cards[0]!.lane).toBe("working");
   await tg.handle(general("/finish"));
-  expect(sent().at(-1)).toBe("which card? /finish <id>, or send it in the card's topic");
+  expect(sent().at(-1)).toBe("which card? /finish &lt;id&gt;, or send it in the card's topic");
 });
 
 test("/finish on a finished card says so", async () => {
@@ -319,4 +320,18 @@ test("in a card's topic, a slash command the bot doesn't know goes to the agent"
   await tg.handle(inTopic(101, "/compact"));
   await tg.handle(inTopic(101, "/model opus"));
   expect(replies).toEqual([{ id: 5, text: "/compact" }, { id: 5, text: "/model opus" }]);
+});
+
+test("markup Telegram refuses is sent again as plain text", async () => {
+  await linked();
+  const real = api;
+  (tg as any).bot.api = async (m: string, p: any) => {
+    if (m === "sendMessage" && p.parse_mode) throw new Error("telegram sendMessage: Bad Request: can't parse entities: unsupported start tag");
+    return real(m, p);
+  };
+  tg.notify({ kind: "ready", card: { ...card, summary: "**Done**: fixed `login()`" } });
+  await tg.flush();
+  const plain = calls.filter((c) => c.method === "sendMessage").at(-1)!.params;
+  expect(plain.parse_mode).toBeUndefined();
+  expect(plain.text).toBe("✅ Ready\n\nDone: fixed login()\n\nReply here to follow up, or /finish.");
 });
