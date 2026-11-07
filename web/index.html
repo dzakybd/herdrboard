@@ -173,6 +173,16 @@ body { display: flex; flex-direction: column; height: 100dvh; }
 .lane-head .title-s { flex: 1; color: var(--on-surface); }
 .lane.alert { background: color-mix(in srgb, var(--error-container) 45%, var(--sc-low)); }
 .lane.alert .lane-head, .lane.alert .lane-head .title-s { color: var(--error); }
+.lane.autos { flex: .9 1 0; }
+.auto-tile { cursor: pointer; border-left: 3px solid var(--tertiary, var(--primary)); }
+.auto-tile.paused { opacity: .6; }
+.auto-tile .row { display: flex; align-items: center; gap: 8px; }
+.auto-tile .row .t { flex: 1; min-width: 0; }
+.auto-tile .run-btn { height: 30px; padding: 0 12px; font-size: 12px; gap: 4px; }
+.auto-tile .run-btn .icon { font-size: 16px; }
+.auto-tile .card-link { cursor: pointer; }
+.auto-tile .sched { display: flex; gap: 6px; font-size: 12px; line-height: 16px; color: var(--on-surface-variant); }
+.auto-tile .sched .icon { font-size: 15px; }
 .empty { padding: 20px 4px; text-align: center; color: var(--on-surface-variant); font-size: 12px; opacity: .8; }
 
 .card { position: relative; display: grid; gap: 8px; padding: 12px 14px; margin-bottom: 8px; border-radius: 12px; background: var(--sc-lowest); box-shadow: var(--shadow-1); cursor: pointer; }
@@ -631,7 +641,13 @@ function renderOrch() {
 function renderBoard() {
   const cards = S.cards.filter((c) => !filter || String(c.project_id) === filter);
   const recent = Date.now() - 3 * 86400_000;
-  const html = S.lanes.map((lane) => {
+  const autos = S.automations.filter((a) => !filter || String(a.project_id) === filter);
+  // Not a lane: nothing can be dropped here, and a tile opens the automation, not a card.
+  const autoLane = autos.length ? `<section class="lane autos">
+      <div class="lane-head">${icon("schedule")}<span class="title-s">Automations</span><span class="badge">${autos.length}</span></div>
+      <div class="lane-body">${autos.map(autoTileHtml).join("")}</div>
+    </section>` : "";
+  const html = autoLane + S.lanes.map((lane) => {
     const list = cards.filter((c) => c.lane === lane && (lane !== "done" || c.updated_at > recent));
     const alert = lane === "needs_you" && list.length;
     return `<section class="lane ${alert ? "alert" : ""} ${list.length ? "" : "vacant"}" data-lane="${lane}">
@@ -640,6 +656,35 @@ function renderBoard() {
     </section>`;
   }).join("");
   if (html !== lastBoard) { $("#board").innerHTML = html; lastBoard = html; }
+}
+
+/** An automation on the board: when it runs next, and what its card is doing now. */
+function autoTileHtml(a) {
+  const p = projectOf(a.project_id);
+  const card = S.cards.filter((c) => c.automation_id === a.id).sort((x, y) => y.id - x.id)[0];
+  const next = new Date(a.next_due).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const when = !a.enabled ? "Paused" : a.blocked ? "Blocked" : `Next ${next}`;
+  const dot = !a.enabled ? "" : a.blocked ? "blocked" : card && ["working", "review"].includes(card.lane) ? "working" : "idle";
+  const chips = [
+    card && `<span class="chip card-link ${card.lane === "needs_you" ? "err" : card.lane === "ready" ? "ok" : "tonal"}" data-auto-card="${card.id}" role="button" tabindex="0" title="Open card #${card.id}">#${card.id} · ${LANES[card.lane][0]}</span>`,
+    !filter && p && `<span class="chip">${icon("folder")}${esc(p.name)}</span>`,
+  ].filter(Boolean).join("");
+  return `<article class="card auto-tile ${a.enabled ? "" : "paused"}" tabindex="0" data-auto="${a.id}" aria-label="Automation ${esc(a.title)}">
+    <div class="row"><div class="t">${esc(a.title)}</div>
+      <button class="btn tonal run-btn" data-auto-run="${a.id}" title="Run now" aria-label="Run ${esc(a.title)} now">${icon("play_arrow")}Run</button></div>
+    <div class="status"><span class="dot ${dot}"></span><span>${esc(when)}</span></div>
+    <div class="sched">${icon("event_repeat")}${esc(describeSchedule(a.trigger))}</div>
+    ${a.blocked ? `<div class="why">${esc(a.blocked.reason)}</div>` : ""}
+    ${chips ? `<div class="chips">${chips}</div>` : ""}</article>`;
+}
+
+/** The automations dialog, opened on one automation's editor. */
+function openAutomation(id) {
+  const a = S.automations.find((x) => x.id === id);
+  if (!a) return;
+  loadAutoForm(a);
+  $("#autoAdd").open = true;
+  renderAutos(); $("#autoDlg").showModal();
 }
 
 function cardHtml(c) {
@@ -743,13 +788,28 @@ $("#replyText").addEventListener("keydown", (e) => { if (e.key === "Enter") send
 
 // ---- board interactions --------------------------------------------------
 const board = $("#board");
-board.addEventListener("click", (e) => { const el = e.target.closest(".card"); if (el) openSheet(Number(el.dataset.id)); });
-board.addEventListener("keydown", (e) => { const el = e.target.closest(".card"); if (el && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openSheet(Number(el.dataset.id)); } });
+/** Automation tiles first: they look like cards but open the automation, its card, or run it. */
+function boardActivate(e) {
+  const run = e.target.closest("[data-auto-run]");
+  if (run) return act(() => api("POST", `/api/automations/${run.dataset.autoRun}/run`), "Run started");
+  const link = e.target.closest("[data-auto-card]");
+  if (link) return openSheet(Number(link.dataset.autoCard));
+  const tile = e.target.closest(".auto-tile");
+  if (tile) return openAutomation(Number(tile.dataset.auto));
+  const el = e.target.closest(".card");
+  if (el) openSheet(Number(el.dataset.id));
+}
+board.addEventListener("click", boardActivate);
+board.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  if (e.target.closest("[data-auto-run]")) return; // a button: the browser already turns Enter into a click
+  if (e.target.closest(".card, [data-auto-card]")) { e.preventDefault(); boardActivate(e); }
+});
 board.addEventListener("dragstart", (e) => { const el = e.target.closest(".card"); if (!el) return; dragging = true; el.classList.add("dragging"); e.dataTransfer.setData("text/plain", el.dataset.id); });
 board.addEventListener("dragend", (e) => { dragging = false; e.target.closest?.(".card")?.classList.remove("dragging"); $$(".lane.over").forEach((l) => l.classList.remove("over")); });
-board.addEventListener("dragover", (e) => { const lane = e.target.closest(".lane"); if (!lane) return; e.preventDefault(); $$(".lane.over").forEach((l) => l !== lane && l.classList.remove("over")); lane.classList.add("over"); });
+board.addEventListener("dragover", (e) => { const lane = e.target.closest(".lane[data-lane]"); if (!lane) return; e.preventDefault(); $$(".lane.over").forEach((l) => l !== lane && l.classList.remove("over")); lane.classList.add("over"); });
 board.addEventListener("drop", (e) => {
-  const lane = e.target.closest(".lane");
+  const lane = e.target.closest(".lane[data-lane]");
   if (!lane) return;
   e.preventDefault(); lane.classList.remove("over"); dragging = false;
   const id = e.dataTransfer.getData("text/plain");
