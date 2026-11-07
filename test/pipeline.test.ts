@@ -487,3 +487,29 @@ describe("automations", () => {
     expect(store.automationCards(a.id, 1)).toHaveLength(1);
   });
 });
+
+describe("notify", () => {
+  test("tells about needs_you, ready and done, in order", async () => {
+    const events: string[] = [];
+    p = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500, notify: (e) => events.push(`${e.kind}: ${e.card.attention ?? e.card.summary}`) });
+    const card = await started({ review: 0 });
+    p.ask(card.id, "which db?");
+    herdr.status.set(card.worker_pane!, "idle");
+    await p.sync();
+    herdr.status.set(card.worker_pane!, "working");
+    await p.sync();
+    p.done(card.id, "done");
+    await p.finish(card.id);
+    expect(events).toEqual(["needs_you: which db?", "ready: done", "done: done"]);
+  });
+
+  test("a failed launch tells too", async () => {
+    const events: string[] = [];
+    p = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500, notify: (e) => events.push(`${e.kind}: ${e.card.attention}`) });
+    herdr.run = async () => {
+      throw new Error("pane gone");
+    };
+    await started();
+    expect(events).toEqual(["needs_you: Launch failed: pane gone"]);
+  });
+});

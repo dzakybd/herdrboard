@@ -124,6 +124,7 @@ main { min-width: 0; }
     <a href="#needs-you">Needs you</a>
     <a href="#attachments">Attachments and follow-ups</a>
     <a href="#phone">Phone access</a>
+    <a href="#telegram">Telegram</a>
     <a href="#cli">CLI reference</a>
     <a href="#skill">Agent skill</a>
     <a href="#troubleshooting">Troubleshooting</a>
@@ -296,6 +297,18 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
       <div class="note warn"><span class="icon">lock</span><p>It is plain HTTP: use it only on a network you trust, or reach it through Tailscale. To revoke every device, delete <code>~/.herdrboard/token</code> and run <code>hb restart</code>.</p></div>
     </section>
 
+    <section id="telegram">
+      <h2>Telegram</h2>
+      <p>The board can reach you in a Telegram group, with one topic per card. It posts when a card needs you or reaches Ready, and closes the topic when you finish the card. Your text reply in a card's topic goes to its agent, the same as a reply on the board.</p>
+      <ol class="steps">
+        <li>In Telegram, open <code>@BotFather</code>, send <code>/newbot</code>, and copy the token.</li>
+        <li>Create a group, add the bot, and turn on <b>Topics</b> (group info → Edit).</li>
+        <li>Make the bot an admin with <b>Manage Topics</b>.</li>
+        <li>On the Mac, run <code>hb telegram setup</code> (it asks for the token), then send the <code>/link &lt;code&gt;</code> it prints in the group.</li>
+      </ol>
+      <div class="note warn"><span class="icon">lock</span><p>Only the person who sent <code>/link</code> is listened to. Questions and summaries pass through Telegram's servers. <code>hb telegram off</code> forgets the bot.</p></div>
+    </section>
+
     <section id="cli">
       <h2>CLI reference</h2>
       <p>Everything in the UI is also in <code>hb</code>. Agents use the same commands, and <code>$HB_CARD</code> / <code>$HB_PROJECT</code> fill in the ids for them.</p>
@@ -341,6 +354,7 @@ tail -f ~/.herdrboard/serve.log</pre>
       <h3>Where things live</h3>
       <div class="table-wrap"><table>
         <tr><td><code>~/.herdrboard/herdrboard.json</code></td><td>Projects, cards, activity, automations, settings (plain JSON)</td></tr>
+        <tr><td><code>~/.herdrboard/telegram.json</code></td><td>Telegram bot token and linked group</td></tr>
         <tr><td><code>~/.herdrboard/cards/&lt;id&gt;/</code></td><td>Briefs handed to the agents, and <code>attachments/</code></td></tr>
         <tr><td><code>~/.herdr/worktrees/&lt;repo&gt;/</code></td><td>Card worktrees (herdr's)</td></tr>
         <tr><td><code>~/.herdrboard/serve.log</code></td><td>Service log</td></tr>

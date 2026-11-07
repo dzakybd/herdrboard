@@ -12,6 +12,7 @@ import { Pipeline, slug } from "./pipeline.ts";
 import { defaultSettings, EFFORTS, MODES, storeRole, validateSettings } from "./profiles.ts";
 import { nextDue, parseTrigger } from "./scheduler.ts";
 import { git, inspectPath } from "./inspect.ts";
+import { Telegram } from "./telegram.ts";
 import { applyImport, exportBundle, planImport } from "./transfer.ts";
 
 export const HOME = process.env.HB_HOME ?? `${homedir()}/.herdrboard`;
@@ -34,7 +35,8 @@ export function serve(): void {
   mkdirSync(HOME, { recursive: true });
   if (migrateSqlite(`${HOME}/herdrboard.db`, `${HOME}/herdrboard.json`)) console.log("moved state from herdrboard.db to herdrboard.json");
   const store = new Store(`${HOME}/herdrboard.json`, () => defaultSettings());
-  const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}`, cleanup: finishCleanup });
+  const telegram = new Telegram(HOME, (id, text) => pipe.reply(id, text));
+  const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}`, cleanup: finishCleanup, notify: (e) => telegram.notify(e) });
 
   /** Role override fields (name, config object or empty) → validated JSON column values. */
   const roles = <T extends Record<string, any>>(patch: T): T => {
@@ -77,6 +79,14 @@ export function serve(): void {
       store.saveSettings(validateSettings(body));
       return store.settings();
     },
+
+    "GET /api/telegram": () => telegram.status(),
+    "POST /api/telegram": (_r, _p, body) => {
+      const token = String(body.token ?? "").trim();
+      if (!token) throw new Error("a bot token from @BotFather is required");
+      return telegram.setup(token);
+    },
+    "DELETE /api/telegram": () => telegram.disable(),
 
     "GET /api/export": () => exportBundle(store),
     "POST /api/import/check": (_r, _p, body) => planImport(store, body.bundle, body, inspectPath),
@@ -268,6 +278,7 @@ export function serve(): void {
   });
 
   pipe.recover();
+  telegram.start();
   const tick = () => pipe.tick().catch((e) => console.error(`tick: ${e.message}`));
   // Attachments of long-finished cards would pile up; a done card keeps them for 30 days.
   const prune = () => {
@@ -288,6 +299,7 @@ export function serve(): void {
     stopping = true;
     console.log(`${signal}: draining, agents keep running`);
     clearInterval(ticker);
+    telegram.stop();
     await server.stop();
     const clean = await pipe.drain(DRAIN_MS);
     console.log(clean ? "drained, exiting" : `launches still running after ${DRAIN_MS / 1000}s, exiting anyway`);

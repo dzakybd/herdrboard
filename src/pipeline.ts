@@ -17,7 +17,11 @@ export interface PipelineOptions {
   launchTimeoutMs?: number;
   /** Housekeeping after Finish (branches, folder worktrees). Kept out of Herdr so the pipeline stays testable. */
   cleanup?: Cleanup;
+  /** Told when a card starts waiting on the human, reaches Ready, or is finished (Telegram). Must not throw. */
+  notify?: (event: BoardEvent) => void;
 }
+
+export type BoardEvent = { kind: "needs_you" | "ready" | "done"; card: Card };
 
 export class Pipeline {
   private launching = new Set<number>();
@@ -155,8 +159,9 @@ export class Pipeline {
     this.launching.add(id);
     work()
       .catch((e) => {
-        this.store.updateCard(id, { lane: "needs_you", attention: `Launch failed: ${e.message}`, resume_lane: null });
-        this.store.log(id, `launch failed: ${e.message}`);
+        // The card may have been deleted while it was launching.
+        const card = this.store.card(id);
+        if (card) this.needsYou(card, `Launch failed: ${e.message}`, null);
       })
       .finally(() => this.launching.delete(id));
   }
@@ -204,8 +209,9 @@ export class Pipeline {
   }
 
   private needsYou(card: Card, attention: string, resume: Lane | null): void {
-    this.store.updateCard(card.id, { lane: "needs_you", attention, resume_lane: resume, worked: 0 });
+    const updated = this.store.updateCard(card.id, { lane: "needs_you", attention, resume_lane: resume, worked: 0 });
     this.store.log(card.id, `needs you: ${attention}`);
+    this.opts.notify?.({ kind: "needs_you", card: updated });
   }
 
   // ---- reports from agents (hb CLI) --------------------------------------
@@ -261,7 +267,9 @@ export class Pipeline {
 
   private toReady(id: number): Card {
     this.store.log(id, "ready");
-    return this.store.updateCard(id, { lane: "ready", attention: null, resume_lane: null });
+    const card = this.store.updateCard(id, { lane: "ready", attention: null, resume_lane: null });
+    this.opts.notify?.({ kind: "ready", card });
+    return card;
   }
 
   // ---- human actions -----------------------------------------------------
@@ -321,7 +329,7 @@ export class Pipeline {
     else if (card.tab_id) await this.herdr.closeTab(card.tab_id).catch(() => {});
     this.store.log(id, "finished");
     await this.cleanUp(card);
-    return this.store.updateCard(id, {
+    const done = this.store.updateCard(id, {
       lane: "done",
       attention: null,
       resume_lane: null,
@@ -330,6 +338,8 @@ export class Pipeline {
       worker_pane: null,
       reviewer_pane: null,
     });
+    this.opts.notify?.({ kind: "done", card: done });
+    return done;
   }
 
   private async cleanUp(card: Card): Promise<void> {

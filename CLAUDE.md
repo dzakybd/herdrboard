@@ -33,6 +33,7 @@
 - Role config (profile/model/effort/mode) is JSON in the `orchestrator`/`worker`/`reviewer` columns; `resolveRole` merges card → project → settings per field, `launchCommand` builds the command. The UI mirrors the merge in `effective()`.
 
 ### Forbidden
+- Talking to Telegram through anything but `src/telegram.ts`, or answering messages from anyone but the linked user.
 - Talking to herdr through anything but `src/herdr.ts` (the `Herdr` interface keeps the pipeline testable).
 - Closing herdr workspaces, tabs, or panes that herdrboard did not create, or running `herdr server stop`.
 - Answering agent prompts other than Claude Code's folder-trust prompt automatically.

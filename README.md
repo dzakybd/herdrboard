@@ -50,6 +50,17 @@ A project can also be a folder that holds several repositories. Cards there run 
 
 Adding a project means you trust it. Claude Code asks "do you trust this folder?" for every new worktree, and herdrboard answers yes. It answers that prompt and no other.
 
+## Telegram
+
+The board can talk to you in a Telegram group: one topic per card. It posts when a card needs you or reaches Ready, takes your text reply in that topic as a reply to the card's agent, and closes the topic on Finish.
+
+1. Create a bot with @BotFather (`/newbot`) and copy its token.
+2. Create a group, add the bot, and turn on **Topics** (group info → Edit).
+3. Make the bot an admin with **Manage Topics**.
+4. Run `hb telegram setup` (it asks for the token), then send the `/link <code>` it prints in the group.
+
+Only the person who sent `/link` is listened to. The token is in `~/.herdrboard/telegram.json` (mode 600); `hb telegram off` forgets it. Questions and summaries go through Telegram's servers. Files sent in Telegram are not passed on yet; attach them on the board.
+
 ## CLI
 
 `hb help` lists everything. Agents use:
@@ -97,6 +108,7 @@ Only through the `herdr` CLI: `worktree create/remove`, `tab create`, `pane run/
 | Path | What |
 | --- | --- |
 | `~/.herdrboard/herdrboard.json` | projects, cards, events, automations, settings (one JSON file; a board from before is moved over from `herdrboard.db` on start) |
+| `~/.herdrboard/telegram.json` | Telegram bot token and linked group |
 | `~/.herdrboard/cards/<id>/` | brief files handed to agents |
 | `~/.herdrboard/serve.log` | service log |
 

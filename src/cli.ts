@@ -36,6 +36,11 @@ const HELP = `hb: herdrboard CLI
                     [--worker PROFILE] [--model M] [--effort E] [--mode MODE]
   hb automation run <name>
 
+  hb telegram setup [bot-token]              connect a bot from @BotFather (asks for the token if not given),
+                                             then /link it in a group with Topics
+  hb telegram status
+  hb telegram off
+
   hb orch start [project]                    start (or focus) the project's orchestrator in herdr
   hb orch say [project] "<text>"
 
@@ -119,7 +124,7 @@ const args = (spec: ParseArgsConfig["options"], from = rest) => {
   }
 };
 
-switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "orch" ? `${cmd} ${sub}` : cmd) {
+switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "orch" || cmd === "telegram" ? `${cmd} ${sub}` : cmd) {
   case "serve": {
     (await import("./server.ts")).serve();
     break;
@@ -310,6 +315,19 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
   case "automation run": {
     if (!rest[0]) die("usage: hb automation run <name>");
     console.log(line(await call("POST", `/api/automations/${encodeURIComponent(rest[0])}/run`)));
+    break;
+  }
+  case "telegram setup":
+  case "telegram status":
+  case "telegram off": {
+    // Without an argument the token is asked for, so it stays out of shell history.
+    const token = sub === "setup" ? (rest[0] ?? prompt("Bot token from @BotFather:")) : null;
+    if (sub === "setup" && !token) die("usage: hb telegram setup [bot-token]");
+    const s =
+      sub === "setup" ? await call("POST", "/api/telegram", { token }) : sub === "off" ? await call("DELETE", "/api/telegram") : await call("GET", "/api/telegram");
+    if (!s.enabled) console.log("telegram is off");
+    else if (s.linked) console.log(`telegram: @${s.bot}, linked`);
+    else console.log(`telegram: @${s.bot}, not linked yet. In your Telegram group (Topics on, bot added as admin with Manage Topics), send:\n  /link ${s.code}`);
     break;
   }
   case "orch start":
