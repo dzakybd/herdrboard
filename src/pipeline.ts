@@ -25,6 +25,8 @@ export type BoardEvent = { kind: "needs_you" | "ready" | "done"; card: Card };
 
 export class Pipeline {
   private launching = new Set<number>();
+  /** Automations inside fire(): a second Run click or a tick must not prompt the same agent twice. */
+  private firing = new Set<number>();
   /** pane id → agent status from the last sync, for the UI. */
   statuses = new Map<string, AgentStatus>();
   private ticking = false;
@@ -219,6 +221,7 @@ export class Pipeline {
   done(id: number, summary: string): Card {
     const card = this.expect(id, "working");
     this.store.updateCard(id, { summary, attention: null, resume_lane: null });
+    this.store.endRun(id, summary);
     this.store.log(id, `worker done: ${summary}`);
     if (!card.review) return this.toReady(id);
     this.store.updateCard(id, { lane: "review" });
@@ -390,17 +393,31 @@ export class Pipeline {
   }
 
   /**
-   * Creates the automation's card. The previous card is finished first if it
-   * sits in Ready; if it is still in progress or can't be finished, the fire is
-   * skipped, never queued.
+   * An automation keeps one card. A fire while that card sits in Ready with its
+   * agent alive sends the brief to the same agent again. If the agent is gone,
+   * the card is finished and a new one made. A card still in progress, or one
+   * that can't be finished, makes the fire skip, never queue.
    */
   async fire(a: Automation, now = Date.now()): Promise<Card | null> {
+    if (this.firing.has(a.id)) return null;
+    this.firing.add(a.id);
+    try {
+      return await this.fireOnce(a, now);
+    } finally {
+      this.firing.delete(a.id);
+    }
+  }
+
+  private async fireOnce(a: Automation, now: number): Promise<Card | null> {
+    const previous = this.store.automation(a.id)!.last_run_at;
     this.store.updateAutomation(a.id, { last_run_at: now });
     const open = this.store.cards().find((c) => c.automation_id === a.id && c.lane !== "done");
     if (open && open.lane !== "ready") {
       this.store.log(open.id, `automation ${a.name} fired while this card is open; skipped`);
       return null;
     }
+    const status = open?.worker_pane ? (await this.herdr.agents()).get(open.worker_pane) : undefined;
+    if (open && status) return this.rerun(a, open, now, status, previous);
     if (open) {
       try {
         await this.finish(open.id);
@@ -412,7 +429,7 @@ export class Pipeline {
         return null;
       }
     }
-    return this.store.addCard({
+    const card = this.store.addCard({
       project_id: a.project_id,
       title: a.title,
       brief: a.brief,
@@ -423,6 +440,34 @@ export class Pipeline {
       reviewer: a.reviewer,
       automation_id: a.id,
     });
+    this.store.addRun(a.id, card.id, now);
+    return card;
+  }
+
+  /** The next run on the agent that did the last one: same card, worktree and conversation. */
+  private async rerun(a: Automation, card: Card, now: number, status: AgentStatus, previous: number): Promise<Card | null> {
+    // Not dropped: the run stays due, so the next tick tries again. Logged once, not every tick.
+    const wait = (why: string) => {
+      this.store.updateAutomation(a.id, { last_run_at: previous });
+      const text = `automation ${a.name} is due, waiting: ${why}`;
+      if (this.store.events(card.id).at(-1)?.text !== text) this.store.log(card.id, text);
+      return null;
+    };
+    // Typing into a turn in progress or a permission prompt would answer it for you.
+    if (status !== "idle" && status !== "done") return wait(`the agent is ${status}`);
+    const { maxWorkers } = this.store.settings();
+    if (LIVE.reduce((n, lane) => n + this.store.cardsIn(lane).length, 0) >= maxWorkers) return wait(`all ${maxWorkers} worker slots are busy`);
+    const project = this.store.project(card.project_id)!;
+    // Edits to the automation since the last run apply to this one (the worker profile can't: the agent stays).
+    const updated = this.store.updateCard(card.id, { title: a.title, brief: a.brief, review: a.review, reviewer: a.reviewer, round: 0 });
+    const brief = this.writeBrief(`cards/${card.id}/worker.md`, workerBrief(updated, project, this.attachmentFiles(card.id)));
+    // A card from before runs were recorded: its first run becomes run 1.
+    if (!this.store.runCount(card.id)) this.store.addRun(a.id, card.id, card.created_at, card.summary);
+    const run = this.store.runCount(card.id) + 1;
+    await this.herdr.prompt(card.worker_pane!, `Automation "${a.title}" is due again (run ${run}). Read ${brief} again and do this run, then report with \`hb done\` as before.`);
+    this.store.addRun(a.id, card.id, now);
+    this.store.log(card.id, `run ${run}: brief sent to the same agent`);
+    return this.store.updateCard(card.id, { lane: "working", attention: null, resume_lane: null, summary: null, worked: 0 });
   }
 
   /** Why this automation can't start a new run: its open card waits on a human. */

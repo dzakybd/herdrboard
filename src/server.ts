@@ -209,15 +209,26 @@ export function serve(): void {
       return store.updateAutomation(a.id, patch);
     },
     "GET /api/automations/:id/runs": (_r, p) => {
-      if (!store.automation(Number(p.id))) throw new Error(`no automation #${p.id}`);
-      return store.automationCards(Number(p.id)).map(({ id, title, lane, summary, created_at, updated_at, branch }) => ({ id, title, lane, summary, created_at, updated_at, branch }));
+      const a = store.automation(Number(p.id));
+      if (!a) throw new Error(`no automation #${p.id}`);
+      // A card's earlier runs are over; only its latest one has the card's lane.
+      const latest = new Set<number>();
+      const runs = store.runs(a.id).map((r) => {
+        const c = store.card(r.card_id)!;
+        const lane = latest.has(c.id) ? "done" : c.lane;
+        latest.add(c.id);
+        return { id: c.id, title: c.title, lane, summary: r.summary, created_at: r.at, branch: c.branch };
+      });
+      // Cards from before runs were recorded, one per run.
+      const older = store.automationCards(a.id).filter((c) => !latest.has(c.id)).map(({ id, title, lane, summary, created_at, branch }) => ({ id, title, lane, summary, created_at, branch }));
+      return [...runs, ...older].sort((x, y) => y.created_at - x.created_at).slice(0, 50);
     },
     "DELETE /api/automations/:id": (_r, p) => store.deleteAutomation(Number(p.id)),
     "POST /api/automations/:id/run": async (_r, p) => {
       const a = store.automation(Number(p.id)) ?? store.automationByName(p.id!);
       if (!a) throw new Error(`no automation '${p.id}'`);
       const c = await pipe.fire(a);
-      if (!c) throw new Error(`skipped: automation '${a.name}' still has a card in progress`);
+      if (!c) throw new Error(`not started: automation '${a.name}' has a card in progress, or its run is waiting (see the card's activity)`);
       pipe.startQueued();
       return c;
     },

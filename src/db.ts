@@ -66,6 +66,15 @@ export interface CardEvent {
   text: string;
 }
 
+/** One fire of an automation. Runs of a kept-alive agent share one card. */
+export interface Run {
+  id: number;
+  automation_id: number;
+  card_id: number;
+  at: number;
+  summary: string | null; // the worker's `hb done` for this run
+}
+
 export interface Profile {
   name: string;
   command: string;
@@ -89,22 +98,24 @@ export interface Settings {
 export interface Data {
   version: 1;
   /** Next id per kind. Ids are never reused, so a new card can't inherit an old card's folder or topic. */
-  next: { project: number; card: number; event: number; automation: number };
+  next: { project: number; card: number; event: number; automation: number; run: number };
   settings: Settings | null;
   projects: Project[];
   cards: Card[];
   events: CardEvent[];
   automations: Automation[];
+  runs: Run[];
 }
 
 export const empty = (): Data => ({
   version: 1,
-  next: { project: 1, card: 1, event: 1, automation: 1 },
+  next: { project: 1, card: 1, event: 1, automation: 1, run: 1 },
   settings: null,
   projects: [],
   cards: [],
   events: [],
   automations: [],
+  runs: [],
 });
 
 const byName = (a: { name: string }, b: { name: string }) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
@@ -119,6 +130,9 @@ export class Store {
     defaults: () => Settings,
   ) {
     this.data = path !== ":memory:" && existsSync(path) ? readJson<Data>(path) : empty();
+    // Files written before runs existed.
+    this.data.runs ??= [];
+    this.data.next.run ??= 1;
     if (!this.data.settings) this.saveSettings(defaults());
   }
 
@@ -223,6 +237,7 @@ export class Store {
   deleteCard(id: number): void {
     this.data.cards = this.data.cards.filter((c) => c.id !== id);
     this.data.events = this.data.events.filter((e) => e.card_id !== id);
+    this.data.runs = this.data.runs.filter((r) => r.card_id !== id);
     this.persist();
   }
 
@@ -270,8 +285,35 @@ export class Store {
 
   deleteAutomation(id: number): void {
     this.data.automations = this.data.automations.filter((a) => a.id !== id);
+    this.data.runs = this.data.runs.filter((r) => r.automation_id !== id);
     for (const c of this.data.cards) if (c.automation_id === id) c.automation_id = null;
     this.persist();
+  }
+
+  addRun(automationId: number, cardId: number, at: number, summary: string | null = null): void {
+    this.data.runs.push({ id: this.data.next.run++, automation_id: automationId, card_id: cardId, at, summary });
+    this.persist();
+  }
+
+  runCount(cardId: number): number {
+    return this.data.runs.filter((r) => r.card_id === cardId).length;
+  }
+
+  /** Puts the summary on the card's latest run, if the card belongs to an automation. */
+  endRun(cardId: number, summary: string): void {
+    const run = this.data.runs.findLast((r) => r.card_id === cardId);
+    if (!run) return;
+    run.summary = summary;
+    this.persist();
+  }
+
+  /** An automation's runs, newest first. */
+  runs(automationId: number, limit = 50): Run[] {
+    return this.data.runs
+      .filter((r) => r.automation_id === automationId)
+      .reverse()
+      .slice(0, limit)
+      .map((r) => ({ ...r }));
   }
 
   private newCard(c: Pick<Card, "project_id" | "title" | "brief" | "lane" | "review" | "worktree" | "created_at" | "updated_at"> & Partial<Card>): Card {

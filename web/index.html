@@ -986,7 +986,7 @@ $("#autoList").addEventListener("click", (e) => {
   const blocked = e.target.closest("[data-blocked]");
   if (blocked) return openCardFromDialog(blocked.dataset.blocked);
   if (e.target.closest("[data-history]")) toggleRuns(e.target.closest(".list-item")).catch((err) => snack(err.message, true));
-  if (e.target.closest("[data-run]")) act(() => api("POST", `/api/automations/${id}/run`), "Card created");
+  if (e.target.closest("[data-run]")) act(() => api("POST", `/api/automations/${id}/run`), "Run started");
   if (e.target.closest("[data-edit]")) {
     loadAutoForm(S.automations.find((a) => a.id === Number(id)));
     $("#autoAdd").open = true;

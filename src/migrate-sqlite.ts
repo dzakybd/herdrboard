@@ -20,7 +20,7 @@ export function migrateSqlite(dbPath: string, jsonPath: string): boolean {
   const settings = db.query("SELECT value FROM settings WHERE key = 'settings'").get() as { value: string } | null;
   data.settings = settings ? JSON.parse(settings.value) : null;
   const next = (rows: { id: number }[]) => Math.max(0, ...rows.map((r) => r.id)) + 1;
-  data.next = { project: next(data.projects), card: next(data.cards), event: next(data.events), automation: next(data.automations) };
+  data.next = { project: next(data.projects), card: next(data.cards), event: next(data.events), automation: next(data.automations), run: 1 };
   db.close();
   writeJson(jsonPath, data);
   for (const suffix of ["", "-wal", "-shm"]) if (existsSync(dbPath + suffix)) renameSync(dbPath + suffix, `${dbPath}.migrated${suffix}`);

@@ -428,7 +428,77 @@ describe("automations", () => {
     expect(store.cards()).toHaveLength(1);
   });
 
-  test("the next fire finishes a Ready card and replaces it", async () => {
+  test("the next fire reuses the Ready card's agent: same card, brief sent again", async () => {
+    const a = sweep();
+    const first = (await p.fire(a))!;
+    await p.tick();
+    await p.settle();
+    const pane = store.card(first.id)!.worker_pane!;
+    p.done(first.id, "swept 3 files");
+    store.updateAutomation(a.id, { brief: "sweep harder" });
+    const again = (await p.fire(store.automation(a.id)!))!;
+    expect(again.id).toBe(first.id);
+    expect(again.lane).toBe("working");
+    expect(store.cards()).toHaveLength(1);
+    const last = herdr.prompts.at(-1)!;
+    expect(last.target).toBe(pane);
+    expect(last.text).toContain("is due again (run 2)");
+    const brief = last.text.match(/Read (\S+) again/)![1]!;
+    expect(readFileSync(brief, "utf8")).toContain("sweep harder");
+    p.done(first.id, "swept 1 file");
+    expect(store.runs(a.id).map((r) => r.summary)).toEqual(["swept 1 file", "swept 3 files"]);
+  });
+
+  async function readyRun() {
+    const a = sweep();
+    const card = (await p.fire(a))!;
+    await p.tick();
+    await p.settle();
+    p.done(card.id, "ok");
+    return { a, card: store.card(card.id)! };
+  }
+
+  test("a rerun that can't start stays due and runs on a later fire", async () => {
+    const { a, card } = await readyRun();
+    const others = [add(), add()].map((c) => store.updateCard(c.id, { lane: "working" }));
+    const due = store.automation(a.id)!.last_run_at;
+    expect(await p.fire(a, Date.now())).toBeNull();
+    expect(await p.fire(a, Date.now())).toBeNull();
+    expect(store.automation(a.id)!.last_run_at).toBe(due);
+    expect(store.events(card.id).filter((e) => e.text.includes("waiting: all 2 worker slots are busy"))).toHaveLength(1);
+    store.updateCard(others[0]!.id, { lane: "done" });
+    expect((await p.fire(a))!.lane).toBe("working");
+  });
+
+  test("a rerun never types into an agent that is busy or asking something", async () => {
+    const { a, card } = await readyRun();
+    const prompts = herdr.prompts.length;
+    herdr.status.set(card.worker_pane!, "blocked");
+    expect(await p.fire(a)).toBeNull();
+    expect(herdr.prompts).toHaveLength(prompts);
+    expect(store.events(card.id).at(-1)!.text).toContain("waiting: the agent is blocked");
+  });
+
+  test("two fires at once prompt the agent once", async () => {
+    const { a } = await readyRun();
+    const prompts = herdr.prompts.length;
+    const [x, y] = await Promise.all([p.fire(a), p.fire(a)]);
+    expect([x, y].filter(Boolean)).toHaveLength(1);
+    expect(herdr.prompts).toHaveLength(prompts + 1);
+  });
+
+  test("a card from before runs were recorded keeps its first run in history", async () => {
+    const { a, card } = await readyRun();
+    store.transaction(() => {
+      (store as any).data.runs = [];
+    });
+    store.updateCard(card.id, { summary: "the first run" });
+    await p.fire(a);
+    expect(herdr.prompts.at(-1)!.text).toContain("(run 2)");
+    expect(store.runs(a.id).map((r) => r.summary)).toEqual([null, "the first run"]);
+  });
+
+  test("the next fire finishes a Ready card whose agent is gone and replaces it", async () => {
     const a = sweep();
     const first = (await p.fire(a))!;
     store.updateCard(first.id, { lane: "ready" });
