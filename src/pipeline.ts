@@ -17,11 +17,11 @@ export interface PipelineOptions {
   launchTimeoutMs?: number;
   /** Housekeeping after Finish (branches, folder worktrees). Kept out of Herdr so the pipeline stays testable. */
   cleanup?: Cleanup;
-  /** Told when a card starts waiting on the human, reaches Ready, or is finished (Telegram). Must not throw. */
+  /** Told when a card starts (or reruns), waits on the human, reaches Ready, or is finished (Telegram). Must not throw. */
   notify?: (event: BoardEvent) => void;
 }
 
-export type BoardEvent = { kind: "needs_you" | "ready" | "done"; card: Card };
+export type BoardEvent = { kind: "started" | "needs_you" | "ready" | "done"; card: Card };
 
 export class Pipeline {
   private launching = new Set<number>();
@@ -91,8 +91,9 @@ export class Pipeline {
     for (const card of this.store.cardsIn("todo")) {
       if (active >= maxWorkers) break;
       active++;
-      this.store.updateCard(card.id, { lane: "working", attention: null, resume_lane: null, worked: 0 });
+      const started = this.store.updateCard(card.id, { lane: "working", attention: null, resume_lane: null, worked: 0 });
       this.store.log(card.id, "starting worker");
+      this.opts.notify?.({ kind: "started", card: started });
       this.background(card.id, () => this.startWorker(card.id));
     }
   }
@@ -467,7 +468,9 @@ export class Pipeline {
     await this.herdr.prompt(card.worker_pane!, `Automation "${a.title}" is due again (run ${run}). Read ${brief} again and do this run, then report with \`hb done\` as before.`);
     this.store.addRun(a.id, card.id, now);
     this.store.log(card.id, `run ${run}: brief sent to the same agent`);
-    return this.store.updateCard(card.id, { lane: "working", attention: null, resume_lane: null, summary: null, worked: 0 });
+    const working = this.store.updateCard(card.id, { lane: "working", attention: null, resume_lane: null, summary: null, worked: 0 });
+    this.opts.notify?.({ kind: "started", card: working });
+    return working;
   }
 
   /** Why this automation can't start a new run: its open card waits on a human. */

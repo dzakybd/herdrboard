@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { Card } from "./db.ts";
 import { readJson, writeJson } from "./fs.ts";
 import type { BoardEvent } from "./pipeline.ts";
+import { COMMANDS, MENU, type Board } from "./telegram-commands.ts";
 
 /** Calls one Bot API method; throws with Telegram's description when it refuses. */
 export type BotApi = (method: string, params: object, signal?: AbortSignal) => Promise<any>;
@@ -62,7 +63,8 @@ const ANONYMOUS_ADMIN = 1087968824;
 /**
  * One bot, one forum group, one topic per card. Board events go out to the
  * card's topic; your text in that topic goes to the card's agent like a reply
- * on the board. Only the user who linked the group is listened to.
+ * on the board, and commands (telegram-commands.ts) work anywhere in the
+ * group. Only the user who linked the group is listened to.
  */
 export class Telegram {
   private bot: { state: State; api: BotApi } | null = null;
@@ -71,7 +73,7 @@ export class Telegram {
 
   constructor(
     private home: string,
-    private reply: (cardId: number, text: string) => Promise<void>,
+    private board: Board,
     private apiFor: (token: string) => BotApi = botApi,
   ) {
     if (existsSync(this.path())) {
@@ -118,6 +120,7 @@ export class Telegram {
     if (!this.bot || this.poller) return;
     const { api } = this.bot;
     const ctl = (this.poller = new AbortController());
+    this.registerMenu();
     void (async () => {
       while (!ctl.signal.aborted) {
         try {
@@ -152,16 +155,32 @@ export class Telegram {
     }
     const link = m.text?.match(/^\/link(?:@\w+)?\s+([0-9a-f]+)\s*$/);
     if (link) return this.link(m, link[1]!);
-    if (m.chat.id !== state.chat_id || m.from?.id !== state.user_id || !m.is_topic_message || !m.message_thread_id) return;
-    const cardId = Object.keys(state.topics).find((id) => state.topics[id] === m.message_thread_id);
-    if (!cardId) return;
-    const answer = (text: string) => api("sendMessage", { chat_id: state.chat_id, message_thread_id: m.message_thread_id, text });
+    if (m.chat.id !== state.chat_id || m.from?.id !== state.user_id) return;
+    const thread = m.is_topic_message ? m.message_thread_id : undefined;
+    const topicCard = thread ? Number(Object.keys(state.topics).find((id) => state.topics[id] === thread)) || null : null;
+    const answer = (text: string) => api("sendMessage", { chat_id: state.chat_id, message_thread_id: thread, text: cut(text) });
+    const command = m.text?.match(/^\/(\w+)(?:@(\w+))?(?:\s+([\s\S]*))?$/);
+    if (command?.[2] && command[2] !== state.bot) return;
+    // In a card's topic, a /command the bot doesn't know is for the agent (Claude Code's /compact and the like).
+    const name = command?.[1]!.toLowerCase();
+    const cmd = name && Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
+    if (command && !cmd && !topicCard) return void (await answer("Unknown command. /help lists them."));
+    if (command && cmd) {
+      try {
+        await answer(await cmd.run({ board: this.board, args: command[3] ?? "", topicCard, say: async (t) => void (await answer(t)) }));
+      } catch (e) {
+        await answer((e as Error).message);
+      }
+      return;
+    }
+    if (!topicCard) return;
+    const cardId = topicCard;
     if (!m.text) {
       if (m.photo || m.document) await answer("Files aren't passed on from Telegram yet: attach them on the board.");
       return;
     }
     try {
-      await this.reply(Number(cardId), m.text);
+      await this.board.reply(cardId, m.text);
     } catch (e) {
       await answer(`Not sent: ${(e as Error).message}`);
       return;
@@ -183,7 +202,15 @@ export class Telegram {
     state.chat_id = m.chat.id;
     state.user_id = m.from.id;
     this.save();
-    await api("sendMessage", { chat_id: m.chat.id, message_thread_id: m.message_thread_id, text: "Linked to herdrboard. Each card that needs you gets its own topic here." });
+    this.registerMenu();
+    await api("sendMessage", { chat_id: m.chat.id, message_thread_id: m.message_thread_id, text: "Linked to herdrboard. Each card gets its own topic here once it starts. /help lists the commands." });
+  }
+
+  /** Puts the commands in Telegram's / menu for the linked group. */
+  private registerMenu(): void {
+    const chat_id = this.bot?.state.chat_id;
+    if (!chat_id) return;
+    this.bot!.api("setMyCommands", { commands: MENU, scope: { type: "chat", chat_id } }).catch((e) => console.error(`telegram menu: ${(e as Error).message}`));
   }
 
   private async send({ kind, card }: BoardEvent): Promise<void> {
@@ -194,7 +221,7 @@ export class Telegram {
       if (thread) await api("closeForumTopic", { chat_id: state.chat_id, message_thread_id: thread });
       return;
     }
-    const text = message(kind, card).slice(0, MAX_TEXT);
+    const text = cut(message(kind, card));
     if (thread) {
       try {
         return await api("sendMessage", { chat_id: state.chat_id, message_thread_id: thread, text });
@@ -218,7 +245,14 @@ export class Telegram {
   }
 }
 
+/** Telegram's length limit, cut on characters so an emoji is never split in half. */
+function cut(text: string): string {
+  const chars = Array.from(text);
+  return chars.length > MAX_TEXT ? `${chars.slice(0, MAX_TEXT - 1).join("")}…` : text;
+}
+
 function message(kind: Exclude<BoardEvent["kind"], "done">, card: Card): string {
+  if (kind === "started") return `▶️ Started\n\n${card.brief.trim().slice(0, 1500) || "(no brief)"}\n\n/status for progress. Reply here to talk to the agent.`;
   if (kind === "ready") return `✅ Ready\n\n${card.summary || "(no summary)"}\n\nReply here to follow up, or finish it on the board.`;
   // No resume lane: the agent is gone, so a reply has nowhere to go.
   const next = card.resume_lane ? "Reply here to answer." : "Handle it on the board.";

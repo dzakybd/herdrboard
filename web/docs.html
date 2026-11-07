@@ -299,13 +299,23 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
 
     <section id="telegram">
       <h2>Telegram</h2>
-      <p>The board can reach you in a Telegram group, with one topic per card. It posts when a card needs you or reaches Ready, and closes the topic when you finish the card. Your text reply in a card's topic goes to its agent, the same as a reply on the board.</p>
+      <p>The board can reach you in a Telegram group, with one topic per card. A card's topic opens when it starts, and the bot posts there when the card needs you or reaches Ready. Your text in that topic goes to its agent, the same as a reply on the board. Finishing the card closes the topic.</p>
       <ol class="steps">
         <li>In Telegram, open <code>@BotFather</code>, send <code>/newbot</code>, and copy the token.</li>
         <li>Create a group, add the bot, and turn on <b>Topics</b> (group info → Edit).</li>
         <li>Make the bot an admin with <b>Manage Topics</b>.</li>
         <li>On the Mac, run <code>hb telegram setup</code> (it asks for the token), then send the <code>/link &lt;code&gt;</code> it prints in the group.</li>
       </ol>
+      <p>Commands work anywhere in the group and show in Telegram's <code>/</code> menu:</p>
+      <div class="table-wrap"><table>
+        <tr><td><code>/new [project] &lt;title&gt;</code></td><td>Create a card; lines after the first are its brief. The project can be left out when there is only one.</td></tr>
+        <tr><td><code>/cards</code></td><td>Open cards, their lane, and what each agent is doing</td></tr>
+        <tr><td><code>/status [id]</code></td><td>Lane, what it waits on, summary and recent activity. In a card's topic, that card.</td></tr>
+        <tr><td><code>/finish [id]</code></td><td>Finish a card, like Finish on the board</td></tr>
+        <tr><td><code>/projects</code></td><td>Registered projects</td></tr>
+        <tr><td><code>/run &lt;automation&gt;</code></td><td>Fire an automation now</td></tr>
+      </table></div>
+      <p>In a card's topic, any other text, including Claude Code commands such as <code>/compact</code>, goes to the card's agent.</p>
       <div class="note warn"><span class="icon">lock</span><p>Only the person who sent <code>/link</code> is listened to. Questions and summaries pass through Telegram's servers. <code>hb telegram off</code> forgets the bot.</p></div>
     </section>
 

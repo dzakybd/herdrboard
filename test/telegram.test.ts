@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import type { Card } from "../src/db.ts";
+import type { Card, Project } from "../src/db.ts";
 import { Telegram } from "../src/telegram.ts";
+import type { Board } from "../src/telegram-commands.ts";
 
 const CHAT = -1001;
 const ME = 42;
-const card = { id: 5, title: "Fix login", lane: "working", summary: null, attention: null, resume_lane: null } as Card;
+const card = { id: 5, title: "Fix login", brief: "", lane: "working", summary: null, attention: null, resume_lane: null } as Card;
 
 let home: string;
 let calls: { method: string; params: any }[];
@@ -14,6 +15,8 @@ let replies: { id: number; text: string }[];
 let replyError: string | null;
 let updates: any[][]; // each getUpdates call takes the next batch; then it hangs until aborted
 let tg: Telegram;
+let projects: Project[];
+let cards: (Card & { agent_status: any })[];
 
 const api = async (method: string, params: any, signal?: AbortSignal) => {
   if (method === "getUpdates") {
@@ -26,11 +29,30 @@ const api = async (method: string, params: any, signal?: AbortSignal) => {
   if (method === "createForumTopic") return { message_thread_id: 101 };
   return true;
 };
-const board = () =>
-  new Telegram(home, async (id, text) => {
+const fakeBoard: Board = {
+  async reply(id, text) {
     if (replyError) throw new Error(replyError);
     replies.push({ id, text });
-  }, () => api);
+  },
+  projects: () => projects,
+  cards: () => cards,
+  events: (id) => [{ id: 1, card_id: id, at: 0, text: "starting worker" }],
+  addCard(project, title, brief) {
+    const c = { ...card, id: 6, project_id: projects.find((p) => p.name === project)!.id, title, brief, lane: "todo" as const, agent_status: null };
+    cards.push(c);
+    return c;
+  },
+  async finish(id) {
+    const c = cards.find((x) => x.id === id)!;
+    c.lane = "done";
+    return c;
+  },
+  async runAutomation(name) {
+    if (name !== "nightly") throw new Error(`no automation '${name}'`);
+    return card;
+  },
+};
+const board = () => new Telegram(home, fakeBoard, () => api);
 
 beforeEach(() => {
   home = mkdtempSync(`${tmpdir()}/hb-tg-`);
@@ -38,6 +60,8 @@ beforeEach(() => {
   replies = [];
   replyError = null;
   updates = [];
+  projects = [{ id: 1, name: "web", path: "/repo/web" } as Project];
+  cards = [{ ...card, agent_status: "working" }];
   tg = board();
 });
 
@@ -191,4 +215,108 @@ test("an anonymous admin can't link: anyone else posting as the group would be l
   await tg.handle({ message_id: 1, chat: { id: CHAT, is_forum: true }, from: { id: 1087968824 }, text: `/link ${s.enabled && !s.linked ? s.code : ""}` });
   expect(tg.status()).toMatchObject({ linked: false });
   expect(sent().at(-1)).toContain("anonymous admin");
+});
+
+const general = (text: string, from = ME) => ({ message_id: 9, chat: { id: CHAT }, from: { id: from }, text });
+
+test("/new makes a card in the only project, with the lines after the title as its brief", async () => {
+  await linked();
+  await tg.handle(general("/new Add dark mode\nUse the theme tokens.\nKeep contrast."));
+  expect(cards.at(-1)).toMatchObject({ title: "Add dark mode", brief: "Use the theme tokens.\nKeep contrast.", project_id: 1 });
+  expect(sent()).toEqual([expect.stringContaining("Created #6 in web")]);
+});
+
+test("/new with several projects needs the project first", async () => {
+  await linked();
+  projects.push({ id: 2, name: "api", path: "/repo/api" } as Project);
+  await tg.handle(general("/new Add dark mode"));
+  expect(sent()[0]).toContain("start with the project: web, api");
+  await tg.handle(general("/new api Rate limit"));
+  expect(cards.at(-1)).toMatchObject({ title: "Rate limit", project_id: 2 });
+});
+
+test("/cards lists open cards with what their agent is doing", async () => {
+  await linked();
+  cards.push({ ...card, id: 7, lane: "needs_you", attention: "Which DB?\nmore", agent_status: "idle" }, { ...card, id: 8, lane: "done", agent_status: null });
+  await tg.handle(general("/cards"));
+  expect(sent()[0]).toBe("#5 working, agent working: Fix login\n#7 needs you, agent idle: Fix login\n   Which DB?");
+});
+
+test("/status and /finish act on the topic's card, or the id given", async () => {
+  await linked();
+  tg.notify({ kind: "started", card: { ...card, brief: "do it" } });
+  await tg.flush();
+  calls = [];
+  await tg.handle(inTopic(101, "/status"));
+  expect(sent()[0]).toContain("#5 Fix login\nLane: working (agent working)");
+  expect(sent()[0]).toContain("starting worker");
+  expect(replies).toEqual([]);
+  await tg.handle(inTopic(101, "/finish"));
+  expect(sent().slice(1)).toEqual(["Finishing #5…", "Finished #5."]);
+  expect(cards[0]!.lane).toBe("done");
+  await tg.handle(general("/status 99"));
+  expect(sent().at(-1)).toBe("no card #99");
+});
+
+test("commands answer only the linked user, and ignore ones meant for another bot", async () => {
+  await linked();
+  await tg.handle(general("/cards", 7));
+  await tg.handle(general("/cards@other_bot"));
+  expect(calls).toEqual([]);
+  await tg.handle(general("/cards@hb_bot"));
+  await tg.handle(general("/nope"));
+  await tg.handle(general("/constructor"));
+  expect(sent()[1]).toContain("Unknown command");
+  expect(sent()[2]).toContain("Unknown command");
+});
+
+test("/run fires an automation and reports why one can't", async () => {
+  await linked();
+  await tg.handle(general("/run nightly"));
+  await tg.handle(general("/run nope"));
+  expect(sent()).toEqual(["Run started on #5.", "no automation 'nope'"]);
+});
+
+test("linking puts the commands in Telegram's menu for that group", async () => {
+  const s = await tg.setup("123:abc");
+  await tg.handle({ message_id: 1, chat: { id: CHAT, is_forum: true }, from: { id: ME }, text: `/link ${s.enabled && !s.linked ? s.code : ""}` });
+  const menu = calls.find((c) => c.method === "setMyCommands")!;
+  expect(menu.params.scope).toEqual({ type: "chat", chat_id: CHAT });
+  expect(menu.params.commands.map((c: any) => c.command)).toEqual(["new", "cards", "status", "finish", "projects", "run", "help"]);
+});
+
+test("a started card opens its topic with the brief", async () => {
+  await linked();
+  tg.notify({ kind: "started", card: { ...card, brief: "Write hello.txt" } });
+  await tg.flush();
+  expect(calls.map((c) => c.method)).toEqual(["createForumTopic", "sendMessage"]);
+  expect(sent()[0]).toStartWith("▶️ Started\n\nWrite hello.txt");
+});
+
+test("a card id must be a number: /finish never falls back to the topic's card on a typo", async () => {
+  await linked();
+  tg.notify({ kind: "started", card });
+  await tg.flush();
+  calls = [];
+  await tg.handle(inTopic(101, "/finish 12 please"));
+  expect(sent()).toEqual(["not a card id: 12 please"]);
+  expect(cards[0]!.lane).toBe("working");
+  await tg.handle(general("/finish"));
+  expect(sent().at(-1)).toBe("which card? /finish <id>, or send it in the card's topic");
+});
+
+test("/finish on a finished card says so", async () => {
+  await linked();
+  cards[0]!.lane = "done";
+  await tg.handle(general("/finish 5"));
+  expect(sent()).toEqual(["#5 is already finished"]);
+});
+
+test("in a card's topic, a slash command the bot doesn't know goes to the agent", async () => {
+  await linked();
+  tg.notify({ kind: "started", card });
+  await tg.flush();
+  await tg.handle(inTopic(101, "/compact"));
+  await tg.handle(inTopic(101, "/model opus"));
+  expect(replies).toEqual([{ id: 5, text: "/compact" }, { id: 5, text: "/model opus" }]);
 });

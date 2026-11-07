@@ -60,12 +60,25 @@ Adding a project means you trust it. Claude Code asks "do you trust this folder?
 
 ## Telegram
 
-The board can talk to you in a Telegram group: one topic per card. It posts when a card needs you or reaches Ready, takes your text reply in that topic as a reply to the card's agent, and closes the topic on Finish.
+The board can talk to you in a Telegram group: one topic per card. A card's topic opens when it starts, and the bot posts there when the card needs you or reaches Ready. Your text in that topic goes to the card's agent, and Finish closes the topic.
 
 1. Create a bot with @BotFather (`/newbot`) and copy its token.
 2. Create a group, add the bot, and turn on **Topics** (group info → Edit).
 3. Make the bot an admin with **Manage Topics**.
 4. Run `hb telegram setup` (it asks for the token), then send the `/link <code>` it prints in the group.
+
+Commands work anywhere in the group (they show in Telegram's `/` menu once linked):
+
+| Command | What it does |
+| --- | --- |
+| `/new [project] <title>` | Create a card; lines after the first are its brief. The project can be left out when there is only one. |
+| `/cards` | Open cards, their lane, and what each agent is doing |
+| `/status [id]` | A card's lane, what it waits on, its summary and recent activity. In a card's topic, that card. |
+| `/finish [id]` | Finish a card, like Finish on the board |
+| `/projects` | Registered projects |
+| `/run <automation>` | Fire an automation now |
+
+In a card's topic, any other text, including Claude Code commands such as `/compact`, goes to the card's agent.
 
 Only the person who sent `/link` is listened to. The token is in `~/.herdrboard/telegram.json` (mode 600); `hb telegram off` forgets it. Questions and summaries go through Telegram's servers. Files sent in Telegram are not passed on yet; attach them on the board.
 

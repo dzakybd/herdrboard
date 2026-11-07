@@ -36,7 +36,19 @@ export function serve(): void {
   mkdirSync(HOME, { recursive: true });
   if (migrateSqlite(`${HOME}/herdrboard.db`, `${HOME}/herdrboard.json`)) console.log("moved state from herdrboard.db to herdrboard.json");
   const store = new Store(`${HOME}/herdrboard.json`, () => defaultSettings());
-  const telegram = new Telegram(HOME, (id, text) => pipe.reply(id, text));
+  const telegram = new Telegram(HOME, {
+    reply: (id, text) => pipe.reply(id, text),
+    projects: () => store.projects(),
+    cards: () => store.cards().map((c) => ({ ...c, agent_status: agentStatus(pipe.activePane(c)) })),
+    events: (id) => store.events(id),
+    addCard: (project, title, brief) => createCard({ project, title, brief }),
+    finish: async (id) => {
+      const c = await pipe.finish(id);
+      pipe.startQueued();
+      return c;
+    },
+    runAutomation: (name) => runAutomation(name),
+  });
   const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}`, cleanup: finishCleanup, notify: (e) => telegram.notify(e) });
 
   /** Role override fields (name, config object or empty) → validated JSON column values. */
@@ -47,6 +59,43 @@ export function serve(): void {
     return out as T;
   };
 
+  /** The board, the CLI and Telegram all create cards through this. */
+  const createCard = (body: any) => {
+    const project = body.project_id ? store.project(Number(body.project_id)) : store.projectByName(String(body.project));
+    if (!project) throw new Error(`unknown project '${body.project ?? body.project_id}'`);
+    if (!String(body.title ?? "").trim()) throw new Error("title is required");
+    const c = store.addCard({
+      project_id: project.id,
+      title: String(body.title).trim(),
+      brief: String(body.brief ?? ""),
+      lane: body.lane === "backlog" ? "backlog" : "todo",
+      review: body.review === undefined ? project.review : Number(Boolean(body.review)),
+      worktree: body.worktree === undefined ? 1 : Number(Boolean(body.worktree)),
+      ...roles({ worker: body.worker ?? null, reviewer: body.reviewer ?? null }),
+    });
+    // Before startQueued: the worker's brief lists the files it finds.
+    try {
+      saveAttachments(HOME, c.id, body.attachments);
+    } catch (e) {
+      store.deleteCard(c.id);
+      removeAttachments(HOME, c.id);
+      throw e;
+    }
+    pipe.startQueued();
+    return store.card(c.id)!;
+  };
+
+  const runAutomation = async (key: string) => {
+    const a = store.automation(Number(key)) ?? store.automationByName(key);
+    if (!a) throw new Error(`no automation '${key}'`);
+    const c = await pipe.fire(a);
+    if (!c) throw new Error(`not started: automation '${a.name}' has a card in progress, or its run is waiting (see the card's activity)`);
+    pipe.startQueued();
+    return c;
+  };
+
+  const agentStatus = (pane: string | null) => (pane && pipe.statuses.get(pane)) || null;
+
   const card = (id: string) => {
     const c = store.card(Number(id));
     if (!c) throw new Error(`no card #${id}`);
@@ -56,14 +105,13 @@ export function serve(): void {
   const api: Record<string, (req: Request, p: Record<string, string>, body: any) => unknown> = {
     "GET /api/state": () => {
       const now = Date.now();
-      const status = (pane: string | null) => (pane && pipe.statuses.get(pane)) || null;
       return {
         lanes: LANES,
         efforts: EFFORTS,
         modes: MODES,
         settings: store.settings(),
-        projects: store.projects().map((p) => ({ ...p, orch_status: status(p.orch_pane) })),
-        cards: store.cards().map((c) => ({ ...c, agent_status: status(pipe.activePane(c)) })),
+        projects: store.projects().map((p) => ({ ...p, orch_status: agentStatus(p.orch_pane) })),
+        cards: store.cards().map((c) => ({ ...c, agent_status: agentStatus(pipe.activePane(c)) })),
         automations: store.automations().map((a) => ({
           ...a,
           next_due: nextDue(parseTrigger(a.trigger), Math.max(a.last_run_at, a.created_at), now),
@@ -114,30 +162,7 @@ export function serve(): void {
     "POST /api/projects/:id/orchestrator": (_r, p) => pipe.startOrchestrator(Number(p.id)),
     "POST /api/projects/:id/orchestrator/say": (_r, p, body) => pipe.sayToOrchestrator(Number(p.id), String(body.text)),
 
-    "POST /api/cards": (_r, _p, body) => {
-      const project = body.project_id ? store.project(Number(body.project_id)) : store.projectByName(String(body.project));
-      if (!project) throw new Error(`unknown project '${body.project ?? body.project_id}'`);
-      if (!String(body.title ?? "").trim()) throw new Error("title is required");
-      const c = store.addCard({
-        project_id: project.id,
-        title: String(body.title).trim(),
-        brief: String(body.brief ?? ""),
-        lane: body.lane === "backlog" ? "backlog" : "todo",
-        review: body.review === undefined ? project.review : Number(Boolean(body.review)),
-        worktree: body.worktree === undefined ? 1 : Number(Boolean(body.worktree)),
-        ...roles({ worker: body.worker ?? null, reviewer: body.reviewer ?? null }),
-      });
-      // Before startQueued: the worker's brief lists the files it finds.
-      try {
-        saveAttachments(HOME, c.id, body.attachments);
-      } catch (e) {
-        store.deleteCard(c.id);
-        removeAttachments(HOME, c.id);
-        throw e;
-      }
-      pipe.startQueued();
-      return c;
-    },
+    "POST /api/cards": (_r, _p, body) => createCard(body),
     "POST /api/cards/:id/attachments": (_r, p, body) => {
       const c = card(p.id!);
       if (c.lane === "done") throw new Error("the card is done");
@@ -225,14 +250,7 @@ export function serve(): void {
       return [...runs, ...older].sort((x, y) => y.created_at - x.created_at).slice(0, 50);
     },
     "DELETE /api/automations/:id": (_r, p) => store.deleteAutomation(Number(p.id)),
-    "POST /api/automations/:id/run": async (_r, p) => {
-      const a = store.automation(Number(p.id)) ?? store.automationByName(p.id!);
-      if (!a) throw new Error(`no automation '${p.id}'`);
-      const c = await pipe.fire(a);
-      if (!c) throw new Error(`not started: automation '${a.name}' has a card in progress, or its run is waiting (see the card's activity)`);
-      pipe.startQueued();
-      return c;
-    },
+    "POST /api/automations/:id/run": (_r, p) => runAutomation(p.id!),
   };
 
   const token = loadToken(HOME);

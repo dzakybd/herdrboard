@@ -570,7 +570,7 @@ describe("notify", () => {
     await p.sync();
     p.done(card.id, "done");
     await p.finish(card.id);
-    expect(events).toEqual(["needs_you: which db?", "ready: done", "done: done"]);
+    expect(events).toEqual(["started: null", "needs_you: which db?", "ready: done", "done: done"]);
   });
 
   test("a failed launch tells too", async () => {
@@ -580,6 +580,6 @@ describe("notify", () => {
       throw new Error("pane gone");
     };
     await started();
-    expect(events).toEqual(["needs_you: Launch failed: pane gone"]);
+    expect(events).toEqual(["started: null", "needs_you: Launch failed: pane gone"]);
   });
 });
