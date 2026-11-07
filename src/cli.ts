@@ -34,6 +34,7 @@ const HELP = `hb: herdrboard CLI
   hb automation list
   hb automation add --title T --trigger "every 30m" [--brief B] [--project P] [--no-worktree] [--no-review]
                     [--worker PROFILE] [--model M] [--effort E] [--mode MODE]
+  hb automation edit <name> [--worker PROFILE] [--model M] [--effort E] [--mode MODE] [--trigger T] [--title T] [--brief B]
   hb automation run <name>
 
   hb telegram setup [bot-token]              connect a bot from @BotFather (asks for the token if not given),
@@ -335,6 +336,24 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
       review: values["no-review"] ? false : undefined,
     });
     console.log(`automation ${a.name} "${a.trigger}"`);
+    break;
+  }
+  case "automation edit": {
+    const { values, positionals } = args({
+      trigger: { type: "string" },
+      title: { type: "string" },
+      brief: { type: "string" },
+      worker: { type: "string" },
+      reviewer: { type: "string" },
+      model: { type: "string" },
+      effort: { type: "string" },
+      mode: { type: "string" },
+    });
+    const name = positionals[0] ?? die("usage: hb automation edit <name> [--worker PROFILE] [--model M] [--effort E] [--mode MODE] [--trigger T] [--title T] [--brief B]");
+    const found = (await call("GET", "/api/state")).automations.find((a: any) => a.name === name) ?? die(`no automation '${name}' (see \`hb automation list\`)`);
+    // The worker settings replace the automation's as a whole, like the board's editor.
+    const a = await call("PATCH", `/api/automations/${found.id}`, { trigger: values.trigger, title: values.title, brief: values.brief, reviewer: values.reviewer, worker: workerConfig(values) });
+    console.log(`automation ${a.name} "${a.trigger}"${a.worker ? `  worker ${a.worker}` : ""}`);
     break;
   }
   case "automation run": {
