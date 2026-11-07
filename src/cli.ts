@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { parseArgs, type ParseArgsConfig } from "node:util";
 
-const URL_BASE = process.env.HB_URL ?? `http://127.0.0.1:${process.env.HB_PORT ?? 7420}`;
+const URL_BASE = process.env.HB_URL ?? `http://127.0.0.1:${process.env.HB_PORT ?? 7320}`;
 
 const HELP = `hb: herdrboard CLI
 
@@ -75,6 +75,24 @@ function uploads(paths: string[]): { name: string; data: string }[] {
       die(`can't read ${p}`);
     }
   });
+}
+
+/** The https address `tailscale serve` publishes this board at, if it does. */
+function tailscaleUrl(port: number): string | null {
+  // A userspace tailscaled (Homebrew, no system extension) listens on its own socket.
+  const userSocket = `${process.env.HOME}/.local/state/tailscale/tailscaled.sock`;
+  for (const socket of [process.env.TS_SOCKET, existsSync(userSocket) ? userSocket : undefined, undefined]) {
+    try {
+      const out = Bun.spawnSync(["tailscale", ...(socket ? [`--socket=${socket}`] : []), "serve", "status", "--json"]);
+      if (out.exitCode !== 0) continue;
+      const web: Record<string, { Handlers?: Record<string, { Proxy?: string }> }> = JSON.parse(out.stdout.toString()).Web ?? {};
+      for (const [hostPort, { Handlers = {} }] of Object.entries(web)) {
+        const root = Handlers["/"]?.Proxy?.replace(/\/$/, "");
+        if (root && [`http://127.0.0.1:${port}`, `http://localhost:${port}`, `127.0.0.1:${port}`, String(port)].includes(root)) return `https://${hostPort.replace(/:443$/, "")}`;
+      }
+    } catch {}
+  }
+  return null;
 }
 
 function die(msg: string): never {
@@ -184,11 +202,18 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
     die("herdrboard did not come back within 90s; see ~/.herdrboard/serve.log");
   }
   case "url": {
-    const { HOME, PORT } = await import("./server.ts");
+    const { HOME, HOST, PORT } = await import("./server.ts");
     const { loadToken } = await import("./auth.ts");
-    const bonjour = process.platform === "darwin" ? Bun.spawnSync(["scutil", "--get", "LocalHostName"]).stdout.toString().trim().toLowerCase() : "";
-    const host = bonjour ? `${bonjour}.local` : hostname() || "127.0.0.1";
-    console.log(`http://${host}:${PORT}/?token=${loadToken(HOME)}`);
+    const token = loadToken(HOME);
+    const served = tailscaleUrl(PORT);
+    if (served) {
+      console.log(`${served}/?token=${token}`);
+    } else if (HOST !== "127.0.0.1" && HOST !== "localhost") {
+      const bonjour = process.platform === "darwin" ? Bun.spawnSync(["scutil", "--get", "LocalHostName"]).stdout.toString().trim().toLowerCase() : "";
+      console.log(`http://${bonjour ? `${bonjour}.local` : hostname()}:${PORT}/?token=${token}`);
+    } else {
+      die(`the board only listens on 127.0.0.1. Publish it on your tailnet first:\n  tailscale serve --bg --https=8443 http://127.0.0.1:${PORT}`);
+    }
     break;
   }
   case "project add": {

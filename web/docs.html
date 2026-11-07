@@ -136,7 +136,7 @@ main { min-width: 0; }
       <p class="lead">herdrboard is a kanban board that hands each card to a coding agent running in herdr. Every agent is a normal, interactive Claude Code session, so you can watch it in Ovis and type to it whenever you want. The board decides what each agent works on and tracks where every card is.</p>
       <div class="diagram"><pre class="mermaid">
 flowchart LR
-  you(["You<br/>browser · phone"]) -->|web UI| board["herdrboard<br/>Bun server :7420<br/>SQLite + 3 s tick"]
+  you(["You<br/>browser · phone"]) -->|web UI| board["herdrboard<br/>Bun server :7320<br/>JSON state + 3 s tick"]
   board -->|herdr CLI| herdr["herdr server"]
   herdr --> orch["Orchestrator<br/>main checkout"]
   herdr --> w["Worker<br/>own git worktree"]
@@ -152,7 +152,7 @@ flowchart LR
         <li><b>Install and start the service.</b> This puts <code>hb</code> on your PATH and keeps the board running with launchd.
           <pre>git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 ./scripts/install.sh</pre></li>
-        <li><b>Open the board</b> at <a href="http://127.0.0.1:7420">http://127.0.0.1:7420</a>. On your phone, run <code>hb url</code> and open that link once (see <a href="#phone">Phone access</a>).</li>
+        <li><b>Open the board</b> at <a href="http://127.0.0.1:7320">http://127.0.0.1:7320</a>. On your phone, run <code>hb url</code> and open that link once (see <a href="#phone">Phone access</a>).</li>
         <li><b>Add a project.</b> Open <span class="icon">folder_open</span> Projects, press <b>Browse</b>, click through to your repository (git repos are marked), then <b>Add project</b>. A folder of several repositories works too: workers pick the repositories and make their own worktrees under <code>.hb-worktrees/&lt;card&gt;/</code>, which Finish removes when they have no uncommitted changes (branches stay; anything left is noted in the card's activity).</li>
         <li><b>Check the agents.</b> In <span class="icon">settings</span> Settings, pick the profile, model, effort and mode for the orchestrator, worker and reviewer. Your <code>cc1</code>…<code>cc4</code>, <code>ccd</code> functions are already listed.</li>
         <li><b>Create a card</b> with <b>New card</b>. Write the brief as if for a new teammate: the worker sees only the brief. Leave it in Todo and a worker starts within a few seconds.</li>
@@ -288,13 +288,13 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
 
     <section id="phone">
       <h2>Phone access</h2>
-      <p>The board listens on all interfaces (port 7420). Because agents can run with bypassed permissions, every device other than the Mac needs a token.</p>
+      <p>The board listens on <code>127.0.0.1:7320</code> only. Other devices reach it over Tailscale, which adds HTTPS and keeps it inside your tailnet. Because agents can run with bypassed permissions, every device other than the Mac also needs a token.</p>
       <ol class="steps">
-        <li>On the Mac, run <code>hb url</code>. It prints something like <code>http://your-mac.local:7420/?token=…</code></li>
-        <li>Open that link on your phone once. It stores a cookie and drops the token from the address bar.</li>
-        <li>From then on, <code>http://your-mac.local:7420</code> just works on that phone. Add it to your home screen.</li>
+        <li>On the Mac, publish the board once: <code>tailscale serve --bg --https=8443 http://127.0.0.1:7320</code></li>
+        <li>Run <code>hb url</code>. It prints something like <code>https://your-mac.your-tailnet.ts.net:8443/?token=…</code></li>
+        <li>Open that link on your phone once (Tailscale on). It stores a cookie and drops the token from the address bar. Add it to your home screen.</li>
       </ol>
-      <div class="note warn"><span class="icon">lock</span><p>It is plain HTTP: use it only on a network you trust, or reach it through Tailscale. To revoke every device, delete <code>~/.herdrboard/token</code> and run <code>hb restart</code>.</p></div>
+      <div class="note warn"><span class="icon">lock</span><p>To revoke every device, delete <code>~/.herdrboard/token</code> and run <code>hb restart</code>. <code>HB_HOST=0.0.0.0</code> opens the board on the LAN instead, as plain HTTP.</p></div>
     </section>
 
     <section id="telegram">

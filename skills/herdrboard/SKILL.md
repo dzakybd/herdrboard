@@ -5,7 +5,7 @@ description: "Control herdrboard, a kanban board that runs coding agents as inte
 
 # herdrboard
 
-herdrboard is a local kanban board (`http://127.0.0.1:7420`) whose cards are worked on by coding agents running in [herdr](https://herdr.dev) panes. Each card in Todo gets its own git worktree and a worker agent. When the worker reports done, a reviewer agent checks it (optional per card). You drive it with the `hb` CLI.
+herdrboard is a local kanban board (`http://127.0.0.1:7320`) whose cards are worked on by coding agents running in [herdr](https://herdr.dev) panes. Each card in Todo gets its own git worktree and a worker agent. When the worker reports done, a reviewer agent checks it (optional per card). You drive it with the `hb` CLI.
 
 Lanes: `backlog → todo → working → review → needs_you → ready → done`.
 

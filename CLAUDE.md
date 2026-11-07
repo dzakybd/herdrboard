@@ -6,7 +6,7 @@
 - Language and version: TypeScript on Bun 1.4
 - Framework(s): none (Bun.serve, vanilla HTML/JS; state is one JSON file, `src/db.ts`); marked and DOMPurify are served from node_modules at `/vendor/`, so the UI needs no CDN for them
 - Package manager: bun
-- Runtime / deployment target: local macOS, launchd agent `dev.dzaky.herdrboard` on 127.0.0.1:7420
+- Runtime / deployment target: local macOS, launchd agent `dev.dzaky.herdrboard` on 127.0.0.1:7320, published on the tailnet by `tailscale serve --https=8443`
 
 ### Commands
 - Install: `./scripts/install.sh` (bun install, bun link, launchd)
@@ -15,7 +15,7 @@
 - Test (single file): `bun test test/pipeline.test.ts`
 - Lint: none
 - Typecheck: `bunx tsc --noEmit`
-- Run locally: `HB_HOME=/tmp/hb HB_PORT=7421 bun src/cli.ts serve` (keeps the real service and state untouched)
+- Run locally: `HB_HOME=/tmp/hb HB_PORT=7321 bun src/cli.ts serve` (keeps the real service and state untouched)
 - Restart the service after code changes: `hb restart` (drains in-flight launches first; running agents are not touched). Plain `launchctl kickstart -k` does the same.
 
 ### Layout
@@ -29,7 +29,7 @@
 - Error handling pattern: throw `Error` with a user-readable message; the server turns it into `400 {error}`, and the CLI and UI show it as is.
 - Testing pattern and framework: `bun:test`; drive `Pipeline` through `FakeHerdr`, assert on store state.
 
-- Access control: the server binds 0.0.0.0. `src/auth.ts` lets only loopback requests with a local `Host` header through; everything else needs the token from `~/.herdrboard/token` (cookie, `x-hb-token`, or `?token=` once). Writes must be `application/json`. Keep every route behind `guarded()` in `server.ts`.
+- Access control: the server binds 127.0.0.1 (`HB_HOST` to change). `src/auth.ts` lets only loopback requests with a local `Host` header and no proxy forwarding headers through (`tailscale serve` connects from loopback too); everything else needs the token from `~/.herdrboard/token` (cookie, `x-hb-token`, or `?token=` once). Writes must be `application/json`. Keep every route behind `guarded()` in `server.ts`.
 - Role config (profile/model/effort/mode) is JSON in the `orchestrator`/`worker`/`reviewer` columns; `resolveRole` merges card → project → settings per field, `launchCommand` builds the command. The UI mirrors the merge in `effective()`.
 
 ### Forbidden

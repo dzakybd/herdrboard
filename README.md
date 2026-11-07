@@ -21,7 +21,7 @@ Requires `bun`, `herdr` (with its server running), and `git`.
 ```sh
 git clone https://github.com/dzakybd/herdrboard && cd herdrboard
 ./scripts/install.sh      # bun link (puts `hb` on PATH) + launchd agent dev.dzaky.herdrboard
-open http://127.0.0.1:7420
+open http://127.0.0.1:7320
 ```
 
 On Linux the same script installs a systemd user unit (`~/.config/systemd/user/dev.dzaky.herdrboard.service`). Run `sudo loginctl enable-linger $USER` once so it survives logout.
@@ -36,13 +36,19 @@ journalctl --user -u dev.dzaky.herdrboard   # or ~/.herdrboard/serve.log
 
 Pull or edit the code, then run `hb restart`. Agents live in herdr, not in the board, so they keep running. On shutdown the board stops taking requests, lets any worker or reviewer that is mid-launch finish (up to 60s), then exits. An agent's `hb done` or `hb ask` made during the restart waits up to 60s for the board to come back instead of failing. `./scripts/install.sh` also applies the longer stop timeout (`ExitTimeOut` / `TimeoutStopSec`) to an existing service.
 
-The full guide, with diagrams, is built into the board at **http://127.0.0.1:7420/docs** (the book icon in the top bar).
+The full guide, with diagrams, is built into the board at **http://127.0.0.1:7320/docs** (the book icon in the top bar).
 
 ## Phone and other devices
 
-The board listens on `0.0.0.0:7420` (`HB_HOST` to change). Because agents can run with bypassed permissions, access from any other device needs a token. Run `hb url` on the Mac and open the link once on your phone: it sets a cookie and redirects to the board. The token lives in `~/.herdrboard/token` (mode 600); delete the file and restart to rotate it. This Mac (the CLI and agents) needs no token.
+The board listens on `127.0.0.1:7320` only. Other devices reach it over Tailscale, which gives it HTTPS and keeps it inside your tailnet:
 
-This is plain HTTP, so only open it on a network you trust, or put it behind Tailscale.
+```sh
+tailscale serve --bg --https=8443 http://127.0.0.1:7320
+```
+
+Because agents can run with bypassed permissions, every other device also needs a token. Run `hb url` on the Mac: it finds the Tailscale address and prints `https://<mac>.<tailnet>.ts.net:8443/?token=…`. Open it once on your phone; it sets a cookie and redirects to the board. The token lives in `~/.herdrboard/token` (mode 600); delete the file and restart to rotate it. This Mac (the CLI and agents) needs no token.
+
+`HB_HOST=0.0.0.0` opens the board on the LAN instead, as plain HTTP.
 
 Add a project with **Projects → Browse** (a folder picker that marks git repositories), or `hb project add <repo>`,, check the profiles under **Settings**, then create a card.
 

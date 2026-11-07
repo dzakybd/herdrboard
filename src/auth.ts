@@ -1,7 +1,8 @@
 // The board starts agents that may run with bypassed permissions, so anything
 // that can call the API can run commands on this Mac. Requests from this
-// machine pass (the CLI and agents); other devices need the token, which
-// `hb url` hands out as a one-time link that sets a cookie.
+// machine pass (the CLI and agents); other devices, which reach it through
+// `tailscale serve`, need the token that `hb url` hands out as a one-time link
+// that sets a cookie.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
@@ -29,7 +30,10 @@ export function gate(req: Request, ip: string, token: string, port: number): Res
   if (req.method !== "GET" && !req.headers.get("content-type")?.startsWith("application/json")) {
     return Response.json({ error: "content-type must be application/json" }, { status: 415 });
   }
-  if (isLoopback(ip)) {
+  // A local reverse proxy (`tailscale serve`) also connects from loopback: its
+  // forwarding headers mark the request as coming from another device.
+  const proxied = ["x-forwarded-for", "forwarded", "tailscale-user-login"].some((h) => req.headers.has(h));
+  if (isLoopback(ip) && !proxied) {
     // A local request for some other Host is a DNS-rebinding page, not us.
     const host = req.headers.get("host") ?? "";
     if ([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(host)) return null;

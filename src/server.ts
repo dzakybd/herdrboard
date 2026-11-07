@@ -16,8 +16,9 @@ import { Telegram } from "./telegram.ts";
 import { applyImport, exportBundle, planImport } from "./transfer.ts";
 
 export const HOME = process.env.HB_HOME ?? `${homedir()}/.herdrboard`;
-export const PORT = Number(process.env.HB_PORT ?? 7420);
-const HOST = process.env.HB_HOST ?? "0.0.0.0";
+export const PORT = Number(process.env.HB_PORT ?? 7320);
+// Other devices come in through `tailscale serve`; HB_HOST=0.0.0.0 opens the LAN instead.
+export const HOST = process.env.HB_HOST ?? "127.0.0.1";
 const TICK_MS = 3000;
 const DRAIN_MS = 60_000;
 

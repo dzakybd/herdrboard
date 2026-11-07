@@ -90,7 +90,7 @@ beforeEach(() => {
     maxRounds: 2,
   }));
   herdr = new FakeHerdr();
-  p = new Pipeline(store, herdr, { home: (home = mkdtempSync(`${tmpdir()}/hb-`)), url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500 });
+  p = new Pipeline(store, herdr, { home: (home = mkdtempSync(`${tmpdir()}/hb-`)), url: "http://127.0.0.1:7320", pollMs: 1, launchTimeoutMs: 500 });
   projectId = store.addProject({ name: "demo", path: "/repo/demo", base: "main" }).id;
 });
 
@@ -111,7 +111,7 @@ describe("worker start", () => {
     expect(card.branch).toBe(`hb/${card.id}-add-hello`);
     expect(card.cwd).toBe(`/wt/hb/${card.id}-add-hello`);
     expect(herdr.commands[0]!.command).toMatch(
-      new RegExp(`^HB_CARD=${card.id} HB_ROLE=worker HB_URL=http://127.0.0.1:7420 cc2 --permission-mode bypassPermissions --add-dir '.*/cards/${card.id}'$`),
+      new RegExp(`^HB_CARD=${card.id} HB_ROLE=worker HB_URL=http://127.0.0.1:7320 cc2 --permission-mode bypassPermissions --add-dir '.*/cards/${card.id}'$`),
     );
     expect(herdr.names.get(`hb-${card.id}-worker`)).toBe(card.worker_pane!);
     const brief = herdr.prompts[0]!.text.match(/^Read (\S+) and follow it\.$/)![1]!;
@@ -374,7 +374,7 @@ describe("finish cleanup", () => {
     let boom = false;
     const q = new Pipeline(store, herdr, {
       home: mkdtempSync(`${tmpdir()}/hb-`),
-      url: "http://127.0.0.1:7420",
+      url: "http://127.0.0.1:7320",
       pollMs: 1,
       launchTimeoutMs: 500,
       cleanup: async (c) => {
@@ -403,7 +403,7 @@ describe("folder projects", () => {
   test("a card runs in the folder and Finish closes its tab", async () => {
     const folder = store.addProject({ name: "many", path: "/repos", base: "" });
     const home = mkdtempSync(`${tmpdir()}/hb-`);
-    const q = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500 });
+    const q = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7320", pollMs: 1, launchTimeoutMs: 500 });
     const card = add({ project_id: folder.id, review: 0 });
     await q.tick();
     await q.settle();
@@ -561,7 +561,7 @@ describe("automations", () => {
 describe("notify", () => {
   test("tells about needs_you, ready and done, in order", async () => {
     const events: string[] = [];
-    p = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500, notify: (e) => events.push(`${e.kind}: ${e.card.attention ?? e.card.summary}`) });
+    p = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7320", pollMs: 1, launchTimeoutMs: 500, notify: (e) => events.push(`${e.kind}: ${e.card.attention ?? e.card.summary}`) });
     const card = await started({ review: 0 });
     p.ask(card.id, "which db?");
     herdr.status.set(card.worker_pane!, "idle");
@@ -575,7 +575,7 @@ describe("notify", () => {
 
   test("a failed launch tells too", async () => {
     const events: string[] = [];
-    p = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7420", pollMs: 1, launchTimeoutMs: 500, notify: (e) => events.push(`${e.kind}: ${e.card.attention}`) });
+    p = new Pipeline(store, herdr, { home, url: "http://127.0.0.1:7320", pollMs: 1, launchTimeoutMs: 500, notify: (e) => events.push(`${e.kind}: ${e.card.attention}`) });
     herdr.run = async () => {
       throw new Error("pane gone");
     };
