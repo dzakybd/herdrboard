@@ -29,7 +29,7 @@
 - Error handling pattern: throw `Error` with a user-readable message; the server turns it into `400 {error}`, and the CLI and UI show it as is.
 - Testing pattern and framework: `bun:test`; drive `Pipeline` through `FakeHerdr`, assert on store state.
 
-- Access control: the server binds 127.0.0.1 (`HB_HOST` to change). `src/auth.ts` lets only loopback requests with a local `Host` header and no proxy forwarding headers through (`tailscale serve` connects from loopback too); everything else needs the token from `~/.herdrboard/token` (cookie, `x-hb-token`, or `?token=` once). Writes must be `application/json`. Keep every route behind `guarded()` in `server.ts`.
+- Access control: the server binds 127.0.0.1 (`HB_HOST` to change). `src/auth.ts` lets only loopback requests with a local `Host` header and no proxy forwarding headers through (`tailscale serve` connects from loopback too); everything else needs the token from `~/.herdrboard/token` (cookie, `x-hb-token`, or `?token=` once). Browsers without it get `web/login.html`, which posts the password to `/login` (rate-limited); `hb password` replaces the token. Writes must be `application/json`. Keep every route behind `guarded()` in `server.ts`, except `/login`.
 - Role config (profile/model/effort/mode) is JSON in the `orchestrator`/`worker`/`reviewer` columns; `resolveRole` merges card → project → settings per field, `launchCommand` builds the command. The UI mirrors the merge in `effective()`.
 
 ### Forbidden

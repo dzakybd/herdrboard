@@ -10,6 +10,8 @@ const HELP = `hb: herdrboard CLI
   hb serve                                   run the board (web UI + tick loop)
   hb restart                                 restart the service; running agents are not touched
   hb url                                     link for your phone/other devices (carries the access token)
+  hb password [new]                          set the password other devices sign in with (asks if not given),
+                                             then restarts; devices signed in before must sign in again
 
   hb export [file]                           save projects, automations, card history and settings as JSON
   hb import <file> [--dry-run] [--path PROJECT=PATH]... [--skip PROJECT]...
@@ -219,6 +221,16 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
       die(`the board only listens on 127.0.0.1. Publish it on your tailnet first:\n  tailscale serve --bg --https=${PORT} http://127.0.0.1:${PORT}`);
     }
     break;
+  }
+  case "password": {
+    const { HOME } = await import("./server.ts");
+    const { saveToken } = await import("./auth.ts");
+    // Without an argument it is asked for, so it stays out of shell history.
+    const pw = sub ?? prompt("New board password:");
+    if (!pw) die("usage: hb password [new]");
+    try { saveToken(HOME, pw); } catch (e) { die((e as Error).message); }
+    console.log("password saved; restarting so the board uses it");
+    process.exit(Bun.spawnSync([process.execPath, process.argv[1]!, "restart"], { stdio: ["inherit", "inherit", "inherit"] }).exitCode);
   }
   case "project add": {
     const { values, positionals } = args({ name: { type: "string" }, base: { type: "string" }, "no-review": { type: "boolean" } });

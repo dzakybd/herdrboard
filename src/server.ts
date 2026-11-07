@@ -4,7 +4,7 @@ import { basename } from "node:path";
 import { attachmentPath, listAttachments, removeAttachments, saveAttachments } from "./attachments.ts";
 import { finishCleanup } from "./cleanup.ts";
 import { LANES, Store, type Lane, type PullVerdict } from "./db.ts";
-import { gate, loadToken } from "./auth.ts";
+import { gate, loadToken, login } from "./auth.ts";
 import { expandHome, listDirs } from "./fs.ts";
 import { cliHerdr } from "./herdr.ts";
 import { migrateSqlite } from "./migrate-sqlite.ts";
@@ -326,6 +326,8 @@ export function serve(): void {
     port: PORT,
     routes: { ...routes, "/": guarded(() => new Response(page, { headers: { "content-type": "text/html" } })),
       "/docs": guarded(() => new Response(docs, { headers: { "content-type": "text/html" } })),
+      // The only route outside guarded(): it is how other devices get the cookie.
+      "/login": { POST: (req) => login(req, token) },
       "/theme.js": script("../web/theme.js"),
       "/vendor/marked.js": script("../node_modules/marked/lib/marked.umd.js"),
       "/vendor/purify.js": script("../node_modules/dompurify/dist/purify.min.js"),

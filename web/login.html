@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>herdrboard</title>
+<style>
+:root { --primary: #0b57d0; --on-primary: #fff; --surface: #f8f9fa; --card: #fff; --on-surface: #1f1f1f; --muted: #444746; --outline: #747775; --error: #b3261e; color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root { --primary: #a8c7fa; --on-primary: #062e6f; --surface: #131314; --card: #1f1f20; --on-surface: #e3e3e3; --muted: #c4c7c5; --outline: #8e918f; --error: #f2b8b5; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 16px; background: var(--surface); color: var(--on-surface); font: 16px/1.5 system-ui, sans-serif; }
+form { width: 100%; max-width: 340px; display: grid; gap: 12px; padding: 24px; border-radius: 16px; background: var(--card); }
+h1 { margin: 0; font-size: 22px; font-weight: 500; }
+p { margin: 0; color: var(--muted); font-size: 14px; }
+input { font: inherit; padding: 12px; border: 1px solid var(--outline); border-radius: 8px; background: transparent; color: inherit; }
+input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+button { font: inherit; font-weight: 500; padding: 12px; border: 0; border-radius: 20px; background: var(--primary); color: var(--on-primary); cursor: pointer; }
+button:disabled { opacity: .6; }
+#err { color: var(--error); min-height: 1.5em; }
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>herdrboard</h1>
+  <p>Enter the board password. Set it on the Mac with <code>hb password</code>.</p>
+  <input id="pw" type="password" autocomplete="current-password" aria-label="Password" required autofocus>
+  <button>Sign in</button>
+  <p id="err" role="alert"></p>
+</form>
+<script>
+const f = document.getElementById("f"), err = document.getElementById("err");
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = f.querySelector("button");
+  btn.disabled = true; err.textContent = "";
+  try {
+    const r = await fetch("/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: document.getElementById("pw").value }) });
+    if (r.ok) return location.reload();
+    err.textContent = (await r.json().catch(() => ({}))).error ?? `sign-in failed (${r.status})`;
+  } catch { err.textContent = "the board did not answer"; }
+  btn.disabled = false;
+};
+</script>
+</body>
+</html>
