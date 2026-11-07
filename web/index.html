@@ -171,6 +171,10 @@ body { display: flex; flex-direction: column; height: 100dvh; }
 .lane-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px 16px; color: var(--on-surface-variant); }
 .lane-head .icon { font-size: 18px; }
 .lane-head .title-s { flex: 1; color: var(--on-surface); }
+.lane-head .note-btn { width: 28px; height: 28px; margin: -6px -4px -6px -8px; }
+.lane-head .note-btn .icon { font-size: 16px; }
+.lane-head .note-btn[aria-expanded="true"] { color: var(--primary); }
+.lane-note { margin: -4px 12px 10px; padding: 8px 10px; border-radius: 8px; background: var(--sc); color: var(--on-surface-variant); font-size: 12px; line-height: 16px; }
 .lane.alert { background: color-mix(in srgb, var(--error-container) 45%, var(--sc-low)); }
 .lane.alert .lane-head, .lane.alert .lane-head .title-s { color: var(--error); }
 .lane.autos { flex: .9 1 0; }
@@ -292,8 +296,11 @@ details > .stack, details > form { margin-top: 16px; }
 .snackbar.err { background: var(--error-container); color: var(--on-error-container); }
 
 @media (max-width: 720px) {
-  .appbar { padding: 0 4px 0 12px; }
-  .appbar .field { width: auto; flex: 1; }
+  .appbar { padding: 0 4px 0 12px; gap: 2px; }
+  /* Tighter icons leave the project picker room to show its name. */
+  .appbar .field { width: auto; flex: 1; margin-right: 4px; }
+  .appbar .field select { width: 100%; min-width: 0; }
+  .appbar .icon-btn { width: 40px; height: 40px; flex: none; }
   .brand b, .spacer { display: none; }
   body { display: block; height: auto; }
   .board { flex-direction: column; overflow: visible; padding-bottom: 96px; }
@@ -524,6 +531,27 @@ const MODE_LABEL = { bypassPermissions: "Bypass", acceptEdits: "Accept edits", a
 const STATUS_LABEL = { working: "Working", blocked: "Waiting for you", idle: "Idle", done: "Finished turn", unknown: "Unknown" };
 
 let S = null, openCard = null, dragging = false, lastBoard = "";
+/** Columns whose explanation is open. */
+const openNotes = new Set();
+/** What each column means; numbers come from Settings. */
+const LANE_NOTES = {
+  automations: () => "Scheduled jobs. Each keeps one card and one agent across its runs. Run starts one now; click a tile to edit it.",
+  backlog: () => "Parked. Nothing starts here. Move a card to Todo when it should run.",
+  todo: () => `Queued. A card starts by itself as soon as a worker slot is free (${S.settings.maxWorkers} at a time).`,
+  working: () => "An agent is on it, in the card's own worktree or the main checkout.",
+  review: () => `A reviewer agent checks the work. Requested changes go back to the worker, up to ${S.settings.maxRounds} rounds.`,
+  needs_you: () => "Waiting for you: a question, a permission prompt, or an agent that stopped. Reply here, or answer in herdr.",
+  ready: () => "Finished, waiting for you to read. The agent is still there: reply to follow up, or Finish.",
+  done: () => "Finished: the agent is stopped and its worktree removed (the branch is kept). Hidden after 3 days.",
+};
+/** A column header: icon, name, count, and an ⓘ that shows what the column means. */
+function laneHead(key, iconName, name, count, alert = false) {
+  const note = LANE_NOTES[key]();
+  const open = openNotes.has(key);
+  return `<div class="lane-head" title="${esc(note)}">${icon(iconName)}<span class="title-s">${name}</span>
+      <button class="icon-btn note-btn" data-note="${key}" aria-expanded="${open}" aria-label="What ${name} means"><span class="icon">info</span></button>
+      <span class="badge ${alert ? "err" : ""}">${count}</span></div>${open ? `<p class="lane-note">${esc(note)}</p>` : ""}`;
+}
 let filter = (() => { try { return localStorage.getItem("hb.project") ?? ""; } catch { return ""; } })();
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -644,14 +672,14 @@ function renderBoard() {
   const autos = S.automations.filter((a) => !filter || String(a.project_id) === filter);
   // Not a lane: nothing can be dropped here, and a tile opens the automation, not a card.
   const autoLane = autos.length ? `<section class="lane autos">
-      <div class="lane-head">${icon("schedule")}<span class="title-s">Automations</span><span class="badge">${autos.length}</span></div>
+      ${laneHead("automations", "schedule", "Automations", autos.length)}
       <div class="lane-body">${autos.map(autoTileHtml).join("")}</div>
     </section>` : "";
   const html = autoLane + S.lanes.map((lane) => {
     const list = cards.filter((c) => c.lane === lane && (lane !== "done" || c.updated_at > recent));
     const alert = lane === "needs_you" && list.length;
     return `<section class="lane ${alert ? "alert" : ""} ${list.length ? "" : "vacant"}" data-lane="${lane}">
-      <div class="lane-head">${icon(LANES[lane][1])}<span class="title-s">${LANES[lane][0]}</span><span class="badge ${alert ? "err" : ""}">${list.length}</span></div>
+      ${laneHead(lane, LANES[lane][1], LANES[lane][0], list.length, alert)}
       <div class="lane-body">${list.map(cardHtml).join("") || `<div class="empty">${lane === "todo" ? "Drop a card to start it" : "Empty"}</div>`}</div>
     </section>`;
   }).join("");
@@ -790,6 +818,12 @@ $("#replyText").addEventListener("keydown", (e) => { if (e.key === "Enter") send
 const board = $("#board");
 /** Automation tiles first: they look like cards but open the automation, its card, or run it. */
 function boardActivate(e) {
+  const note = e.target.closest("[data-note]");
+  if (note) {
+    const k = note.dataset.note;
+    openNotes.has(k) ? openNotes.delete(k) : openNotes.add(k);
+    return renderBoard();
+  }
   const run = e.target.closest("[data-auto-run]");
   if (run) return act(() => api("POST", `/api/automations/${run.dataset.autoRun}/run`), "Run started");
   const link = e.target.closest("[data-auto-card]");
@@ -802,7 +836,7 @@ function boardActivate(e) {
 board.addEventListener("click", boardActivate);
 board.addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
-  if (e.target.closest("[data-auto-run]")) return; // a button: the browser already turns Enter into a click
+  if (e.target.closest("[data-auto-run], [data-note]")) return; // buttons: the browser already turns Enter into a click
   if (e.target.closest(".card, [data-auto-card]")) { e.preventDefault(); boardActivate(e); }
 });
 board.addEventListener("dragstart", (e) => { const el = e.target.closest(".card"); if (!el) return; dragging = true; el.classList.add("dragging"); e.dataTransfer.setData("text/plain", el.dataset.id); });
