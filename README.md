@@ -43,10 +43,10 @@ The full guide, with diagrams, is built into the board at **http://127.0.0.1:732
 The board listens on `127.0.0.1:7320` only. Other devices reach it over Tailscale, which gives it HTTPS and keeps it inside your tailnet:
 
 ```sh
-tailscale serve --bg --https=8443 http://127.0.0.1:7320
+tailscale serve --bg --https=7320 http://127.0.0.1:7320
 ```
 
-Because agents can run with bypassed permissions, every other device also needs a token. Run `hb url` on the Mac: it finds the Tailscale address and prints `https://<mac>.<tailnet>.ts.net:8443/?token=…`. Open it once on your phone; it sets a cookie and redirects to the board. The token lives in `~/.herdrboard/token` (mode 600); delete the file and restart to rotate it. This Mac (the CLI and agents) needs no token.
+Because agents can run with bypassed permissions, every other device also needs a token. Run `hb url` on the Mac: it finds the Tailscale address and prints `https://<mac>.<tailnet>.ts.net:7320/?token=…`. Open it once on your phone; it sets a cookie and redirects to the board. The token lives in `~/.herdrboard/token` (mode 600); delete the file and restart to rotate it. This Mac (the CLI and agents) needs no token.
 
 `HB_HOST=0.0.0.0` opens the board on the LAN instead, as plain HTTP.
 

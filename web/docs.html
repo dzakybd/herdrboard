@@ -290,8 +290,8 @@ Orch: hb card add "Rate-limit public API" --brief "…" --model opus --effort hi
       <h2>Phone access</h2>
       <p>The board listens on <code>127.0.0.1:7320</code> only. Other devices reach it over Tailscale, which adds HTTPS and keeps it inside your tailnet. Because agents can run with bypassed permissions, every device other than the Mac also needs a token.</p>
       <ol class="steps">
-        <li>On the Mac, publish the board once: <code>tailscale serve --bg --https=8443 http://127.0.0.1:7320</code></li>
-        <li>Run <code>hb url</code>. It prints something like <code>https://your-mac.your-tailnet.ts.net:8443/?token=…</code></li>
+        <li>On the Mac, publish the board once: <code>tailscale serve --bg --https=7320 http://127.0.0.1:7320</code></li>
+        <li>Run <code>hb url</code>. It prints something like <code>https://your-mac.your-tailnet.ts.net:7320/?token=…</code></li>
         <li>Open that link on your phone once (Tailscale on). It stores a cookie and drops the token from the address bar. Add it to your home screen.</li>
       </ol>
       <div class="note warn"><span class="icon">lock</span><p>To revoke every device, delete <code>~/.herdrboard/token</code> and run <code>hb restart</code>. <code>HB_HOST=0.0.0.0</code> opens the board on the LAN instead, as plain HTTP.</p></div>

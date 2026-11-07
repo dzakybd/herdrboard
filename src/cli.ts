@@ -212,7 +212,7 @@ switch (cmd === "card" || cmd === "project" || cmd === "automation" || cmd === "
       const bonjour = process.platform === "darwin" ? Bun.spawnSync(["scutil", "--get", "LocalHostName"]).stdout.toString().trim().toLowerCase() : "";
       console.log(`http://${bonjour ? `${bonjour}.local` : hostname()}:${PORT}/?token=${token}`);
     } else {
-      die(`the board only listens on 127.0.0.1. Publish it on your tailnet first:\n  tailscale serve --bg --https=8443 http://127.0.0.1:${PORT}`);
+      die(`the board only listens on 127.0.0.1. Publish it on your tailnet first:\n  tailscale serve --bg --https=${PORT} http://127.0.0.1:${PORT}`);
     }
     break;
   }

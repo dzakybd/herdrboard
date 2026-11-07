@@ -6,7 +6,7 @@
 - Language and version: TypeScript on Bun 1.4
 - Framework(s): none (Bun.serve, vanilla HTML/JS; state is one JSON file, `src/db.ts`); marked and DOMPurify are served from node_modules at `/vendor/`, so the UI needs no CDN for them
 - Package manager: bun
-- Runtime / deployment target: local macOS, launchd agent `dev.dzaky.herdrboard` on 127.0.0.1:7320, published on the tailnet by `tailscale serve --https=8443`
+- Runtime / deployment target: local macOS, launchd agent `dev.dzaky.herdrboard` on 127.0.0.1:7320, published on the tailnet by `tailscale serve --https=7320`
 
 ### Commands
 - Install: `./scripts/install.sh` (bun install, bun link, launchd)
