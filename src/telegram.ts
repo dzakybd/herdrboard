@@ -9,18 +9,31 @@ import { esc, fit, md, plain } from "./telegram-format.ts";
 /** Calls one Bot API method; throws with Telegram's description when it refuses. */
 export type BotApi = (method: string, params: object, signal?: AbortSignal) => Promise<any>;
 
-export function botApi(token: string): BotApi {
+export function botApi(token: string, wait = (ms: number) => Bun.sleep(ms)): BotApi {
   return async (method, params, signal) => {
-    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(params),
-      // A hung call would hold up every event queued behind it.
-      signal: signal ?? AbortSignal.timeout(CALL_MS),
-    });
-    const data = (await res.json()) as { ok: boolean; result?: unknown; description?: string };
-    if (!data.ok) throw new Error(`telegram ${method}: ${data.description ?? res.status}`);
-    return data.result;
+    // A dropped connection or Telegram's 429/5xx is retried, so a "Needs you" is not lost to one
+    // bad moment. getUpdates has its own loop. A retry after a timeout can repeat a message.
+    const retries = method === "getUpdates" ? 1 : ATTEMPTS;
+    for (let attempt = 1; ; attempt++) {
+      let res: Response;
+      try {
+        res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(params),
+          // A hung call would hold up every event queued behind it.
+          signal: signal ?? AbortSignal.timeout(CALL_MS),
+        });
+      } catch (e) {
+        if (signal?.aborted || attempt >= retries) throw e;
+        await wait(attempt * 1000);
+        continue;
+      }
+      const data = (await res.json()) as { ok: boolean; result?: unknown; description?: string; parameters?: { retry_after?: number } };
+      if (data.ok) return data.result;
+      if ((res.status !== 429 && res.status < 500) || attempt >= retries) throw new Error(`telegram ${method}: ${data.description ?? res.status}`);
+      await wait((data.parameters?.retry_after ?? attempt) * 1000);
+    }
   };
 }
 
@@ -58,6 +71,7 @@ const MAX_TEXT = 4000;
 const POLL_SECONDS = 30;
 const RETRY_MS = 5000;
 const CALL_MS = 20_000;
+const ATTEMPTS = 3;
 /** What Telegram puts in `from` for a message an anonymous admin posts as the group. */
 const ANONYMOUS_ADMIN = 1087968824;
 
@@ -224,9 +238,12 @@ export class Telegram {
     }
     if (kind === "deleted") {
       if (!thread) return;
+      // Forgotten only once Telegram confirms, or a failed delete leaves a topic nothing points to.
+      await api("deleteForumTopic", { chat_id: state.chat_id, message_thread_id: thread }).catch((e) => {
+        if (!/thread not found/i.test((e as Error).message)) throw e;
+      });
       delete state.topics[card.id];
       this.save();
-      await api("deleteForumTopic", { chat_id: state.chat_id, message_thread_id: thread });
       return;
     }
     // A reopened automation card comes back to the topic Finish closed.

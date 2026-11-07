@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { Card, Project } from "../src/db.ts";
-import { Telegram } from "../src/telegram.ts";
+import { botApi, Telegram } from "../src/telegram.ts";
 import type { Board } from "../src/telegram-commands.ts";
 
 const CHAT = -1001;
@@ -355,4 +355,39 @@ test("a deleted card's topic is deleted too", async () => {
   expect(calls.map((c) => c.method)).toEqual(["createForumTopic", "sendMessage", "deleteForumTopic"]);
   expect(calls.at(-1)!.params).toEqual({ chat_id: CHAT, message_thread_id: 101 });
   expect(JSON.parse(readFileSync(`${home}/telegram.json`, "utf8")).topics).toEqual({});
+});
+
+test("a call that drops on the network or hits 429 is retried; one Telegram refuses is not", async () => {
+  const real = globalThis.fetch;
+  const replies: (() => Response)[] = [
+    () => { throw Object.assign(new Error("socket closed"), { code: "ECONNRESET" }); },
+    () => Response.json({ ok: false, description: "Too Many Requests", parameters: { retry_after: 2 } }, { status: 429 }),
+    () => Response.json({ ok: true, result: { message_id: 1 } }),
+    () => Response.json({ ok: false, description: "Bad Request: chat not found" }, { status: 400 }),
+  ];
+  let n = 0;
+  globalThis.fetch = (async () => replies[n++]!()) as any;
+  const waits: number[] = [];
+  try {
+    const call = botApi("t", async (ms) => void waits.push(ms));
+    expect(await call("sendMessage", {})).toEqual({ message_id: 1 });
+    expect(waits).toEqual([1000, 2000]);
+    await expect(call("sendMessage", {})).rejects.toThrow("telegram sendMessage: Bad Request: chat not found");
+    expect(n).toBe(4);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test("a topic delete that fails keeps the topic on record", async () => {
+  await linked();
+  tg.notify({ kind: "started", card });
+  await tg.flush();
+  (tg as any).bot.api = async (m: string) => {
+    if (m === "deleteForumTopic") throw new Error("ECONNRESET");
+    return true;
+  };
+  tg.notify({ kind: "deleted", card });
+  await tg.flush();
+  expect(JSON.parse(readFileSync(`${home}/telegram.json`, "utf8")).topics).toEqual({ "5": 101 });
 });
