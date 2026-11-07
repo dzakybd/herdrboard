@@ -1,4 +1,5 @@
-import { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
+import { readJson, writeJson } from "./fs.ts";
 
 export const LANES = ["backlog", "todo", "working", "review", "needs_you", "ready", "done"] as const;
 export type Lane = (typeof LANES)[number];
@@ -84,72 +85,63 @@ export interface Settings {
   maxRounds: number;
 }
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS projects (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  path TEXT NOT NULL UNIQUE,
-  base TEXT NOT NULL DEFAULT 'main',
-  review INTEGER NOT NULL DEFAULT 1,
-  orchestrator TEXT, worker TEXT, reviewer TEXT,
-  orch_pane TEXT
-);
-CREATE TABLE IF NOT EXISTS cards (
-  id INTEGER PRIMARY KEY,
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  brief TEXT NOT NULL DEFAULT '',
-  lane TEXT NOT NULL DEFAULT 'todo',
-  review INTEGER NOT NULL DEFAULT 1,
-  worktree INTEGER NOT NULL DEFAULT 1,
-  worker TEXT, reviewer TEXT,
-  automation_id INTEGER REFERENCES automations(id) ON DELETE SET NULL,
-  branch TEXT, cwd TEXT, workspace_id TEXT, tab_id TEXT,
-  worker_pane TEXT, reviewer_pane TEXT,
-  round INTEGER NOT NULL DEFAULT 0,
-  worked INTEGER NOT NULL DEFAULT 0,
-  attention TEXT, resume_lane TEXT, summary TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS events (
-  id INTEGER PRIMARY KEY,
-  card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
-  at INTEGER NOT NULL,
-  text TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS automations (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  trigger TEXT NOT NULL,
-  title TEXT NOT NULL,
-  brief TEXT NOT NULL DEFAULT '',
-  worktree INTEGER NOT NULL DEFAULT 1,
-  review INTEGER NOT NULL DEFAULT 1,
-  worker TEXT, reviewer TEXT,
-  enabled INTEGER NOT NULL DEFAULT 1,
-  last_run_at INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-`;
+/** Everything herdrboard keeps, as one JSON file (`~/.herdrboard/herdrboard.json`). */
+export interface Data {
+  version: 1;
+  /** Next id per kind. Ids are never reused, so a new card can't inherit an old card's folder or topic. */
+  next: { project: number; card: number; event: number; automation: number };
+  settings: Settings | null;
+  projects: Project[];
+  cards: Card[];
+  events: CardEvent[];
+  automations: Automation[];
+}
 
-type Row = Record<string, string | number | null>;
+export const empty = (): Data => ({
+  version: 1,
+  next: { project: 1, card: 1, event: 1, automation: 1 },
+  settings: null,
+  projects: [],
+  cards: [],
+  events: [],
+  automations: [],
+});
+
+const byName = (a: { name: string }, b: { name: string }) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 
 export class Store {
-  readonly db: Database;
+  private data: Data;
+  private batching = false;
 
-  constructor(path: string, defaults: () => Settings) {
-    this.db = new Database(path, { create: true });
-    this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-    this.db.exec(SCHEMA);
-    if (!this.db.query("SELECT 1 FROM settings WHERE key = 'settings'").get()) this.saveSettings(defaults());
+  /** `path` is a JSON file, or ":memory:" for a store that is never written (tests). */
+  constructor(
+    private path: string,
+    defaults: () => Settings,
+  ) {
+    this.data = path !== ":memory:" && existsSync(path) ? readJson<Data>(path) : empty();
+    if (!this.data.settings) this.saveSettings(defaults());
+  }
+
+  /** Runs `fn` as one write: if it throws, nothing it changed is kept. */
+  transaction<T>(fn: () => T): T {
+    if (this.batching) return fn();
+    const before = structuredClone(this.data);
+    this.batching = true;
+    try {
+      const out = fn();
+      this.batching = false;
+      this.persist();
+      return out;
+    } catch (e) {
+      this.data = before;
+      throw e;
+    } finally {
+      this.batching = false;
+    }
   }
 
   settings(): Settings {
-    const row = this.db.query("SELECT value FROM settings WHERE key = 'settings'").get() as { value: string };
-    const s = JSON.parse(row.value);
+    const s = structuredClone(this.data.settings!) as any;
     // Before model/effort/mode existed, a role was just a profile name.
     for (const [role, cfg] of Object.entries(s.roles)) {
       if (typeof cfg === "string") s.roles[role] = { profile: cfg, mode: "bypassPermissions" };
@@ -158,128 +150,184 @@ export class Store {
   }
 
   saveSettings(s: Settings): void {
-    this.db.query("INSERT OR REPLACE INTO settings (key, value) VALUES ('settings', ?)").run(JSON.stringify(s));
+    this.data.settings = structuredClone(s);
+    this.persist();
   }
 
   projects(): Project[] {
-    return this.db.query("SELECT * FROM projects ORDER BY name").all() as Project[];
+    return this.data.projects.map((p) => ({ ...p })).sort(byName);
   }
 
   project(id: number): Project | null {
-    return this.db.query("SELECT * FROM projects WHERE id = ?").get(id) as Project | null;
+    return copy(this.data.projects.find((p) => p.id === id));
   }
 
   projectByName(name: string): Project | null {
-    return this.db.query("SELECT * FROM projects WHERE name = ?").get(name) as Project | null;
+    return copy(this.data.projects.find((p) => p.name === name));
   }
 
   addProject(p: { name: string; path: string; base: string; review?: number }): Project {
-    const row = this.db
-      .query("INSERT INTO projects (name, path, base, review) VALUES (?, ?, ?, ?) RETURNING *")
-      .get(p.name, p.path, p.base, p.review ?? 1);
-    return row as Project;
+    this.unique(p.name, p.path);
+    const row: Project = { id: this.data.next.project++, name: p.name, path: p.path, base: p.base, review: p.review ?? 1, orchestrator: null, worker: null, reviewer: null, orch_pane: null };
+    this.data.projects.push(row);
+    this.persist();
+    return { ...row };
   }
 
   updateProject(id: number, patch: Partial<Project>): Project {
-    this.update("projects", id, patch);
-    return this.project(id)!;
+    const row = this.data.projects.find((p) => p.id === id);
+    if (row) this.unique(patch.name ?? row.name, patch.path ?? row.path, id);
+    return this.patch(this.data.projects, id, patch);
   }
 
   deleteProject(id: number): void {
-    this.db.query("DELETE FROM projects WHERE id = ?").run(id);
+    this.transaction(() => {
+      for (const c of this.data.cards.filter((c) => c.project_id === id)) this.deleteCard(c.id);
+      for (const a of this.data.automations.filter((a) => a.project_id === id)) this.deleteAutomation(a.id);
+      this.data.projects = this.data.projects.filter((p) => p.id !== id);
+    });
   }
 
   cards(): Card[] {
-    return this.db.query("SELECT * FROM cards ORDER BY id").all() as Card[];
+    return this.data.cards.map((c) => ({ ...c }));
   }
 
   card(id: number): Card | null {
-    return this.db.query("SELECT * FROM cards WHERE id = ?").get(id) as Card | null;
+    return copy(this.data.cards.find((c) => c.id === id));
   }
 
   cardsIn(lane: Lane): Card[] {
-    return this.db.query("SELECT * FROM cards WHERE lane = ? ORDER BY id").all(lane) as Card[];
+    return this.data.cards.filter((c) => c.lane === lane).map((c) => ({ ...c }));
   }
 
   addCard(c: Pick<Card, "project_id" | "title" | "brief" | "lane" | "review" | "worktree"> & Partial<Card>): Card {
     const now = Date.now();
-    const row = this.db
-      .query(
-        `INSERT INTO cards (project_id, title, brief, lane, review, worktree, worker, reviewer, automation_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
-      )
-      .get(c.project_id, c.title, c.brief, c.lane, c.review, c.worktree, c.worker ?? null, c.reviewer ?? null, c.automation_id ?? null, now, now) as Card;
+    const row = this.newCard({ ...c, created_at: now, updated_at: now });
     this.log(row.id, `created in ${row.lane}`);
-    return row;
+    return { ...row };
   }
 
   /** Restores a card from an export, keeping its timestamps and activity. */
   importCard(c: Pick<Card, "project_id" | "title" | "brief" | "lane" | "review" | "worktree" | "worker" | "reviewer" | "automation_id" | "branch" | "summary" | "created_at" | "updated_at"> & { events: Pick<CardEvent, "at" | "text">[] }): void {
-    const row = this.db
-      .query(
-        `INSERT INTO cards (project_id, title, brief, lane, review, worktree, worker, reviewer, automation_id, branch, summary, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-      )
-      .get(c.project_id, c.title, c.brief, c.lane, c.review, c.worktree, c.worker, c.reviewer, c.automation_id, c.branch, c.summary, c.created_at, c.updated_at) as { id: number };
-    for (const e of c.events) this.db.query("INSERT INTO events (card_id, at, text) VALUES (?, ?, ?)").run(row.id, e.at, e.text);
+    this.transaction(() => {
+      const { events, ...fields } = c;
+      const row = this.newCard(fields);
+      for (const e of events) this.data.events.push({ id: this.data.next.event++, card_id: row.id, at: e.at, text: e.text });
+    });
   }
 
   updateCard(id: number, patch: Partial<Card>): Card {
-    this.update("cards", id, { ...patch, updated_at: Date.now() });
-    return this.card(id)!;
+    return this.patch(this.data.cards, id, { ...patch, updated_at: Date.now() });
   }
 
   deleteCard(id: number): void {
-    this.db.query("DELETE FROM cards WHERE id = ?").run(id);
+    this.data.cards = this.data.cards.filter((c) => c.id !== id);
+    this.data.events = this.data.events.filter((e) => e.card_id !== id);
+    this.persist();
   }
 
   /** An automation's cards, newest first. */
   automationCards(automationId: number, limit = 50): Card[] {
-    return this.db.query("SELECT * FROM cards WHERE automation_id = ? ORDER BY id DESC LIMIT ?").all(automationId, limit) as Card[];
+    return this.data.cards
+      .filter((c) => c.automation_id === automationId)
+      .reverse()
+      .slice(0, limit)
+      .map((c) => ({ ...c }));
   }
 
   log(cardId: number, text: string): void {
-    this.db.query("INSERT INTO events (card_id, at, text) VALUES (?, ?, ?)").run(cardId, Date.now(), text);
+    this.data.events.push({ id: this.data.next.event++, card_id: cardId, at: Date.now(), text });
+    this.persist();
   }
 
   events(cardId: number): CardEvent[] {
-    return this.db.query("SELECT * FROM events WHERE card_id = ? ORDER BY id").all(cardId) as CardEvent[];
+    return this.data.events.filter((e) => e.card_id === cardId).map((e) => ({ ...e }));
   }
 
   automations(): Automation[] {
-    return this.db.query("SELECT * FROM automations ORDER BY name").all() as Automation[];
+    return this.data.automations.map((a) => ({ ...a })).sort(byName);
   }
 
   automation(id: number): Automation | null {
-    return this.db.query("SELECT * FROM automations WHERE id = ?").get(id) as Automation | null;
+    return copy(this.data.automations.find((a) => a.id === id));
   }
 
   automationByName(name: string): Automation | null {
-    return this.db.query("SELECT * FROM automations WHERE name = ?").get(name) as Automation | null;
+    return copy(this.data.automations.find((a) => a.name === name));
   }
 
   addAutomation(a: Omit<Automation, "id" | "last_run_at" | "created_at" | "enabled"> & { enabled?: number }): Automation {
-    return this.db
-      .query(
-        `INSERT INTO automations (name, project_id, trigger, title, brief, worktree, review, worker, reviewer, enabled, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
-      )
-      .get(a.name, a.project_id, a.trigger, a.title, a.brief, a.worktree, a.review, a.worker, a.reviewer, a.enabled ?? 1, Date.now()) as Automation;
+    if (this.data.automations.some((x) => x.name === a.name)) throw new Error(`an automation named '${a.name}' already exists`);
+    const row: Automation = { ...a, id: this.data.next.automation++, enabled: a.enabled ?? 1, last_run_at: 0, created_at: Date.now() };
+    this.data.automations.push(row);
+    this.persist();
+    return { ...row };
   }
 
   updateAutomation(id: number, patch: Partial<Automation>): Automation {
-    this.update("automations", id, patch);
-    return this.automation(id)!;
+    return this.patch(this.data.automations, id, patch);
   }
 
   deleteAutomation(id: number): void {
-    this.db.query("DELETE FROM automations WHERE id = ?").run(id);
+    this.data.automations = this.data.automations.filter((a) => a.id !== id);
+    for (const c of this.data.cards) if (c.automation_id === id) c.automation_id = null;
+    this.persist();
   }
 
-  private update(table: string, id: number, patch: object): void {
-    const entries = Object.entries(patch).filter(([k, v]) => k !== "id" && v !== undefined);
-    if (!entries.length) return;
-    const sets = entries.map(([k]) => `${k} = ?`).join(", ");
-    this.db.query(`UPDATE ${table} SET ${sets} WHERE id = ?`).run(...(entries.map(([, v]) => v) as Row[keyof Row][]), id);
+  private newCard(c: Pick<Card, "project_id" | "title" | "brief" | "lane" | "review" | "worktree" | "created_at" | "updated_at"> & Partial<Card>): Card {
+    if (!this.data.projects.some((p) => p.id === c.project_id)) throw new Error(`no project #${c.project_id}`);
+    const row: Card = {
+      id: this.data.next.card++,
+      project_id: c.project_id,
+      title: c.title,
+      brief: c.brief,
+      lane: c.lane,
+      review: c.review,
+      worktree: c.worktree,
+      worker: c.worker ?? null,
+      reviewer: c.reviewer ?? null,
+      automation_id: c.automation_id ?? null,
+      branch: c.branch ?? null,
+      cwd: null,
+      workspace_id: null,
+      tab_id: null,
+      worker_pane: null,
+      reviewer_pane: null,
+      round: 0,
+      worked: 0,
+      attention: null,
+      resume_lane: null,
+      summary: c.summary ?? null,
+      created_at: c.created_at,
+      updated_at: c.updated_at,
+    };
+    this.data.cards.push(row);
+    this.persist();
+    return row;
   }
+
+  /** Callers update rows they just read, so a missing id is a bug, not a case to handle. */
+  private patch<T extends { id: number }>(rows: T[], id: number, patch: Partial<T>): T {
+    const row = rows.find((r) => r.id === id);
+    if (!row) throw new Error(`no row #${id} to update`);
+    for (const [k, v] of Object.entries(patch)) if (k !== "id" && v !== undefined) (row as any)[k] = v;
+    this.persist();
+    return { ...row };
+  }
+
+  private unique(name: string, path: string, self?: number): void {
+    for (const p of this.data.projects) {
+      if (p.id === self) continue;
+      if (p.name === name) throw new Error(`a project named '${name}' already exists`);
+      if (p.path === path) throw new Error(`${path} is already the project '${p.name}'`);
+    }
+  }
+
+  private persist(): void {
+    if (!this.batching && this.path !== ":memory:") writeJson(this.path, this.data);
+  }
+}
+
+function copy<T extends object>(row: T | undefined): T | null {
+  return row ? { ...row } : null;
 }

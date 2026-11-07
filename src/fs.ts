@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -8,6 +8,26 @@ export interface Listing {
   parent: string | null;
   git: boolean; // this folder is a repository root
   dirs: { name: string; git: boolean }[];
+}
+
+/** Writes a synced temp file, then renames it over `path`: a crash leaves the old file or the new one, never half of either. */
+export function writeJson(path: string, value: unknown, mode = 0o644): void {
+  const fd = openSync(`${path}.tmp`, "w", mode);
+  try {
+    writeSync(fd, `${JSON.stringify(value, null, 2)}\n`);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  renameSync(`${path}.tmp`, path);
+}
+
+export function readJson<T>(path: string): T {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (e) {
+    throw new Error(`can't read ${path}: ${(e as Error).message}. Fix or move the file, then start again.`);
+  }
 }
 
 export const expandHome = (p: string) => p.replace(/^~(?=\/|$)/, homedir());

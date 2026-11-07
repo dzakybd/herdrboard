@@ -7,6 +7,7 @@ import { LANES, Store, type Lane } from "./db.ts";
 import { gate, loadToken } from "./auth.ts";
 import { expandHome, listDirs } from "./fs.ts";
 import { cliHerdr } from "./herdr.ts";
+import { migrateSqlite } from "./migrate-sqlite.ts";
 import { Pipeline, slug } from "./pipeline.ts";
 import { defaultSettings, EFFORTS, MODES, storeRole, validateSettings } from "./profiles.ts";
 import { nextDue, parseTrigger } from "./scheduler.ts";
@@ -31,7 +32,8 @@ const ROLE_FIELDS = ["orchestrator", "worker", "reviewer"];
 
 export function serve(): void {
   mkdirSync(HOME, { recursive: true });
-  const store = new Store(`${HOME}/herdrboard.db`, () => defaultSettings());
+  if (migrateSqlite(`${HOME}/herdrboard.db`, `${HOME}/herdrboard.json`)) console.log("moved state from herdrboard.db to herdrboard.json");
+  const store = new Store(`${HOME}/herdrboard.json`, () => defaultSettings());
   const pipe = new Pipeline(store, cliHerdr, { home: HOME, url: `http://127.0.0.1:${PORT}`, cleanup: finishCleanup });
 
   /** Role override fields (name, config object or empty) → validated JSON column values. */
@@ -179,6 +181,10 @@ export function serve(): void {
       const a = store.automation(Number(p.id));
       if (!a) throw new Error(`no automation #${p.id}`);
       const patch = roles(pick(body, AUTOMATION_FIELDS));
+      if (patch.project_id !== undefined) {
+        patch.project_id = Number(patch.project_id);
+        if (!store.project(patch.project_id)) throw new Error(`no project #${body.project_id}`);
+      }
       if (patch.title !== undefined) {
         patch.title = String(patch.title).trim();
         if (!patch.title) throw new Error("title is required");

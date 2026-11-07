@@ -191,7 +191,7 @@ export function planImport(store: Store, input: unknown, choices: ImportChoices,
 export function applyImport(store: Store, input: unknown, plan: ImportPlan): void {
   if (!plan.ok) throw new Error(`import blocked: ${plan.errors.join("; ")}`);
   const bundle = parseBundle(input);
-  const write = store.db.transaction(() => {
+  store.transaction(() => {
     store.saveSettings(plan.settings);
     const roles = (v: string | null) => storeRole(parseRole(v), plan.settings.profiles);
 
@@ -231,5 +231,4 @@ export function applyImport(store: Store, input: unknown, plan: ImportPlan): voi
       });
     }
   });
-  write();
 }

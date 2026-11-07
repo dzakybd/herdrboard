@@ -96,7 +96,7 @@ Only through the `herdr` CLI: `worktree create/remove`, `tab create`, `pane run/
 
 | Path | What |
 | --- | --- |
-| `~/.herdrboard/herdrboard.db` | SQLite: projects, cards, events, automations, settings |
+| `~/.herdrboard/herdrboard.json` | projects, cards, events, automations, settings (one JSON file; a board from before is moved over from `herdrboard.db` on start) |
 | `~/.herdrboard/cards/<id>/` | brief files handed to agents |
 | `~/.herdrboard/serve.log` | service log |
 
