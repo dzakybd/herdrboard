@@ -16,7 +16,9 @@ Backlog → Todo → Working → Review → Ready → Done
 
 ## Install
 
-Requires `bun`, `herdr` (with its server running), and `git`.
+Requires macOS or Linux with `bun`, `git`, `herdr` (with its server running), and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`claude` on PATH, or your own launcher functions in `~/.zshrc`).
+
+> **Agents run with `bypassPermissions` by default**, so they can run any command in their worktree without asking. That is what lets cards finish unattended. To be asked first, pick another mode in **Settings** (or per project, card, or automation); the card then waits in *Needs you* whenever the agent asks.
 
 ```sh
 git clone https://github.com/dzakybd/herdrboard && cd herdrboard
